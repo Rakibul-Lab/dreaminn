@@ -105,7 +105,10 @@ export function Dashboard() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => api.get<DashboardData>('/dashboard'),
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: DashboardData }>('/dashboard');
+      return res.data;
+    },
     refetchInterval: 30000,
   });
 
@@ -113,7 +116,7 @@ export function Dashboard() {
     return <DashboardSkeleton />;
   }
 
-  const dashboard = data as unknown as DashboardData;
+  const dashboard = data as DashboardData | undefined;
   if (!dashboard) return null;
 
   // For ADMIN and HOTEL_STAFF
