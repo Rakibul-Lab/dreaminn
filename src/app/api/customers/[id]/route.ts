@@ -1,0 +1,90 @@
+import { NextRequest } from 'next/server';
+import { db } from '@/lib/db';
+import { requireRole } from '@/lib/auth';
+import { successResponse, errorResponse, notFoundResponse, logActivity } from '@/lib/api-utils';
+import { RoleType } from '@prisma/client';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const customer = await db.customer.findUnique({
+      where: { id },
+      include: {
+        bookings: {
+          include: {
+            room: { include: { type: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!customer) {
+      return notFoundResponse('Customer');
+    }
+
+    return successResponse(customer);
+  } catch (error) {
+    console.error('Customer fetch error:', error);
+    return errorResponse('Failed to fetch customer', 500);
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    if (authResult instanceof Response) return authResult;
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const existing = await db.customer.findUnique({ where: { id } });
+    if (!existing) {
+      return notFoundResponse('Customer');
+    }
+
+    // If phone is being changed, check for duplicates
+    if (body.phone && body.phone !== existing.phone) {
+      const duplicate = await db.customer.findFirst({
+        where: { phone: body.phone, NOT: { id } },
+      });
+      if (duplicate) {
+        return errorResponse('Customer with this phone number already exists');
+      }
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.email !== undefined) updateData.email = body.email;
+    if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.address !== undefined) updateData.address = body.address;
+    if (body.idType !== undefined) updateData.idType = body.idType;
+    if (body.idNumber !== undefined) updateData.idNumber = body.idNumber;
+    if (body.idDocPath !== undefined) updateData.idDocPath = body.idDocPath;
+    if (body.notes !== undefined) updateData.notes = body.notes;
+
+    const customer = await db.customer.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await logActivity(
+      authResult.id,
+      'UPDATE_CUSTOMER',
+      'hotel',
+      JSON.stringify({ customerId: id, changes: updateData })
+    );
+
+    return successResponse(customer, 'Customer updated successfully');
+  } catch (error) {
+    console.error('Customer update error:', error);
+    return errorResponse('Failed to update customer', 500);
+  }
+}

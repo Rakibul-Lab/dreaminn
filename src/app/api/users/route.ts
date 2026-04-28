@@ -1,0 +1,169 @@
+import { NextRequest } from 'next/server';
+import { db } from '@/lib/db';
+import { requireRole } from '@/lib/auth';
+import { successResponse, errorResponse, paginatedResponse, logActivity } from '@/lib/api-utils';
+import { hashPassword } from '@/lib/password';
+
+// GET /api/users - List users (ADMIN only)
+export async function GET(request: NextRequest) {
+  try {
+    const authResult = requireRole(request, 'ADMIN');
+    if (authResult instanceof Response) return authResult;
+
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const role = searchParams.get('role');
+    const active = searchParams.get('active');
+    const search = searchParams.get('search');
+
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, unknown> = {};
+    if (role) where.role = role;
+    if (active !== null && active !== undefined) where.active = active === 'true';
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      db.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          phone: true,
+          active: true,
+          avatar: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      db.user.count({ where }),
+    ]);
+
+    return paginatedResponse(users, total, page, limit);
+  } catch (error) {
+    console.error('Error listing users:', error);
+    return errorResponse('Failed to fetch users', 500);
+  }
+}
+
+// POST /api/users - Create user (ADMIN only)
+export async function POST(request: NextRequest) {
+  try {
+    const authResult = requireRole(request, 'ADMIN');
+    if (authResult instanceof Response) return authResult;
+
+    const body = await request.json();
+    const { name, email, password, role, phone } = body;
+
+    if (!name || !email || !password || !role) {
+      return errorResponse('Name, email, password, and role are required');
+    }
+
+    const validRoles = ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'];
+    if (!validRoles.includes(role)) {
+      return errorResponse('Invalid role. Must be ADMIN, HOTEL_STAFF, or RESTAURANT_STAFF');
+    }
+
+    const existing = await db.user.findUnique({ where: { email } });
+    if (existing) {
+      return errorResponse('Email already exists');
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    const user = await db.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        phone: phone || null,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    await logActivity(
+      authResult.id,
+      'CREATE_USER',
+      'admin',
+      JSON.stringify({ userId: user.id, email, role })
+    );
+
+    return successResponse(user, 'User created successfully', 201);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return errorResponse('Failed to create user', 500);
+  }
+}
+
+// PUT /api/users - Update user (ADMIN only)
+export async function PUT(request: NextRequest) {
+  try {
+    const authResult = requireRole(request, 'ADMIN');
+    if (authResult instanceof Response) return authResult;
+
+    const body = await request.json();
+    const { id, name, email, role, phone, active } = body;
+
+    if (!id) {
+      return errorResponse('User ID is required');
+    }
+
+    const existing = await db.user.findUnique({ where: { id } });
+    if (!existing) {
+      return errorResponse('User not found', 404);
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (role !== undefined) updateData.role = role;
+    if (phone !== undefined) updateData.phone = phone;
+    if (active !== undefined) updateData.active = active;
+
+    const user = await db.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    await logActivity(
+      authResult.id,
+      'UPDATE_USER',
+      'admin',
+      JSON.stringify({ userId: id, updates: Object.keys(updateData) })
+    );
+
+    return successResponse(user, 'User updated successfully');
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return errorResponse('Failed to update user', 500);
+  }
+}

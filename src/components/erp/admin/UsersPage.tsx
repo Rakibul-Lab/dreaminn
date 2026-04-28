@@ -1,0 +1,333 @@
+'use client'
+
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api-client'
+import { useAuthStore, canAccessAdmin } from '@/lib/auth-store'
+import { useToast } from '@/hooks/use-toast'
+import { format } from 'date-fns'
+import {
+  Users, Plus, Edit2, Power, RefreshCw, Shield, ShieldCheck, ShieldAlert
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
+} from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
+
+interface UserData {
+  id: string
+  email: string
+  name: string
+  role: string
+  phone: string | null
+  active: boolean
+  createdAt: string
+}
+
+const roleIcons: Record<string, React.ReactNode> = {
+  ADMIN: <ShieldAlert className="h-4 w-4 text-red-500" />,
+  HOTEL_STAFF: <ShieldCheck className="h-4 w-4 text-emerald-500" />,
+  RESTAURANT_STAFF: <Shield className="h-4 w-4 text-amber-500" />,
+}
+
+const roleColors: Record<string, string> = {
+  ADMIN: 'bg-red-50 text-red-700 border-red-200',
+  HOTEL_STAFF: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  RESTAURANT_STAFF: 'bg-amber-50 text-amber-700 border-amber-200',
+}
+
+export default function UsersPage() {
+  const { user } = useAuthStore()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [showDialog, setShowDialog] = useState(false)
+  const [editingUser, setEditingUser] = useState<UserData | null>(null)
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'HOTEL_STAFF',
+    phone: '',
+  })
+
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: UserData[]; meta?: { total: number } }>('/users?limit=50')
+      return res
+    },
+    enabled: !!user && canAccessAdmin(user?.role),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      return api.post('/users', form)
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast({ title: 'User Created', description: res.message || 'User created successfully' })
+      closeDialog()
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create user', variant: 'destructive' })
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      return api.put('/users', data)
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast({ title: 'User Updated', description: res.message || 'User updated successfully' })
+      closeDialog()
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update user', variant: 'destructive' })
+    },
+  })
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      return api.put('/users', { id, active })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast({ title: 'Status Updated', description: 'User status has been toggled' })
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update status', variant: 'destructive' })
+    },
+  })
+
+  const closeDialog = () => {
+    setShowDialog(false)
+    setEditingUser(null)
+    setForm({ name: '', email: '', password: '', role: 'HOTEL_STAFF', phone: '' })
+  }
+
+  const openEditDialog = (u: UserData) => {
+    setEditingUser(u)
+    setForm({
+      name: u.name,
+      email: u.email,
+      password: '',
+      role: u.role,
+      phone: u.phone || '',
+    })
+    setShowDialog(true)
+  }
+
+  const openAddDialog = () => {
+    setEditingUser(null)
+    setForm({ name: '', email: '', password: '', role: 'HOTEL_STAFF', phone: '' })
+    setShowDialog(true)
+  }
+
+  const handleSubmit = () => {
+    if (editingUser) {
+      const data: Record<string, unknown> = {
+        id: editingUser.id,
+        name: form.name,
+        email: form.email,
+        role: form.role,
+        phone: form.phone || null,
+      }
+      if (form.password) data.password = form.password
+      updateMutation.mutate(data)
+    } else {
+      createMutation.mutate()
+    }
+  }
+
+  if (!user || !canAccessAdmin(user.role)) {
+    return (
+      <Card className="border-amber-200 bg-amber-50">
+        <CardContent className="p-6 text-center">
+          <p className="text-amber-700 font-medium">Access Denied</p>
+          <p className="text-amber-600 text-sm mt-1">Only administrators can manage users.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const users = usersData?.data || []
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Users className="h-6 w-6 text-amber-600" />
+            User Management
+          </h2>
+          <p className="text-slate-500 text-sm mt-1">Manage system users and roles</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['users'] })}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button onClick={openAddDialog} className="bg-amber-600 hover:bg-amber-700 text-white">
+            <Plus className="h-4 w-4 mr-2" /> Add User
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="max-h-96 overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: 7 }).map((_, j) => (
+                        <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : users.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">No users found</TableCell>
+                  </TableRow>
+                ) : (
+                  users.map((u) => (
+                    <TableRow key={u.id} className="hover:bg-slate-50">
+                      <TableCell className="font-medium">{u.name}</TableCell>
+                      <TableCell className="text-sm text-slate-600">{u.email}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`${roleColors[u.role] || ''} flex items-center gap-1 w-fit`}>
+                          {roleIcons[u.role]}
+                          {u.role.replace('_', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{u.phone || '-'}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={u.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}
+                        >
+                          {u.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-500">
+                        {format(new Date(u.createdAt), 'MMM dd, yyyy')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(u)} title="Edit">
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => toggleActiveMutation.mutate({ id: u.id, active: !u.active })}
+                            title={u.active ? 'Deactivate' : 'Activate'}
+                          >
+                            <Power className={`h-4 w-4 ${u.active ? 'text-red-500' : 'text-emerald-500'}`} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit User Dialog */}
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) closeDialog() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Name</Label>
+              <Input
+                placeholder="Full name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                placeholder="Email address"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>{editingUser ? 'New Password (leave blank to keep current)' : 'Password'}</Label>
+              <Input
+                type="password"
+                placeholder={editingUser ? 'Leave blank to keep current' : 'Password'}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="HOTEL_STAFF">Hotel Staff</SelectItem>
+                  <SelectItem value="RESTAURANT_STAFF">Restaurant Staff</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Phone (optional)</Label>
+              <Input
+                placeholder="Phone number"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!form.name || !form.email || (!editingUser && !form.password) || createMutation.isPending || updateMutation.isPending}
+              onClick={handleSubmit}
+            >
+              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

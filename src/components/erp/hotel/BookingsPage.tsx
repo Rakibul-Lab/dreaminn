@@ -1,0 +1,554 @@
+'use client';
+
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { StatusBadge } from '../shared/StatusBadge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { Plus, Search, LogIn, LogOut, XCircle, Eye } from 'lucide-react';
+
+interface Booking {
+  id: string;
+  customerId: string;
+  roomId: string;
+  status: 'RESERVED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+  checkIn: string;
+  checkOut: string;
+  actualCheckIn?: string | null;
+  actualCheckOut?: string | null;
+  adults: number;
+  children: number;
+  totalRoomCharge: number;
+  advancePayment: number;
+  dueAmount: number;
+  notes?: string | null;
+  customer: { id: string; name: string; phone: string; email?: string };
+  room: { id: string; roomNumber: string; type: { name: string; basePrice: number } };
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+}
+
+interface Room {
+  id: string;
+  roomNumber: string;
+  status: string;
+  type: { name: string; basePrice: number };
+}
+
+export function BookingsPage() {
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [step, setStep] = useState(1);
+
+  // Create booking form state
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [checkInDate, setCheckInDate] = useState('');
+  const [checkOutDate, setCheckOutDate] = useState('');
+  const [adults, setAdults] = useState('1');
+  const [children, setChildren] = useState('0');
+  const [advancePayment, setAdvancePayment] = useState('0');
+  const [bookingNotes, setBookingNotes] = useState('');
+
+  // New customer form
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+
+  const buildQuery = () => {
+    const params: string[] = [`page=${page}`, 'limit=20'];
+    if (statusFilter !== 'all') params.push(`status=${statusFilter}`);
+    return `/bookings?${params.join('&')}`;
+  };
+
+  const { data: bookingsData, isLoading } = useQuery({
+    queryKey: ['bookings', statusFilter, page],
+    queryFn: () => api.get<{ success: boolean; data: Booking[]; meta: { total: number; page: number; totalPages: number } }>(buildQuery()),
+  });
+
+  const { data: customersData } = useQuery({
+    queryKey: ['customers-list'],
+    queryFn: () => api.get<{ success: boolean; data: Customer[] }>('/customers?limit=100'),
+  });
+
+  const { data: roomsData } = useQuery({
+    queryKey: ['available-rooms'],
+    queryFn: () => api.get<{ success: boolean; data: Room[] }>('/rooms?status=AVAILABLE&limit=100'),
+  });
+
+  const bookings = ((bookingsData as any)?.data || []) as Booking[];
+  const totalBookings = (bookingsData as any)?.meta?.total || 0;
+  const totalPages = (bookingsData as any)?.meta?.totalPages || 1;
+  const customers = ((customersData as any)?.data || []) as Customer[];
+  const availableRooms = ((roomsData as any)?.data || []) as Room[];
+
+  const filteredBookings = search
+    ? bookings.filter(
+        (b) =>
+          b.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
+          b.room?.roomNumber?.includes(search) ||
+          b.id.includes(search)
+      )
+    : bookings;
+
+  // Calculate estimated cost
+  const estimatedCost = () => {
+    if (!checkInDate || !checkOutDate || !selectedRoomId) return 0;
+    const room = availableRooms.find((r) => r.id === selectedRoomId);
+    if (!room) return 0;
+    const diff = Math.ceil((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(diff, 0) * room.type.basePrice;
+  };
+
+  const createBookingMutation = useMutation({
+    mutationFn: (data: any) => api.post('/bookings', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      toast.success('Booking created successfully');
+      closeCreateDialog();
+    },
+    onError: () => toast.error('Failed to create booking'),
+  });
+
+  const checkInMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/bookings/check-in/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      toast.success('Guest checked in successfully');
+    },
+    onError: () => toast.error('Failed to check in'),
+  });
+
+  const checkOutMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/bookings/check-out/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      toast.success('Guest checked out successfully');
+    },
+    onError: () => toast.error('Failed to check out'),
+  });
+
+  const createCustomerMutation = useMutation({
+    mutationFn: (data: any) => api.post('/customers', data),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
+      if (res.success && res.data) {
+        setSelectedCustomerId(res.data.id);
+      }
+      toast.success('Customer created');
+      setShowNewCustomer(false);
+    },
+    onError: () => toast.error('Failed to create customer'),
+  });
+
+  const closeCreateDialog = () => {
+    setCreateDialogOpen(false);
+    setStep(1);
+    setSelectedCustomerId('');
+    setSelectedRoomId('');
+    setCheckInDate('');
+    setCheckOutDate('');
+    setAdults('1');
+    setChildren('0');
+    setAdvancePayment('0');
+    setBookingNotes('');
+    setNewCustomerName('');
+    setNewCustomerPhone('');
+    setNewCustomerEmail('');
+    setShowNewCustomer(false);
+  };
+
+  const handleCreateBooking = () => {
+    if (!selectedCustomerId || !selectedRoomId || !checkInDate || !checkOutDate) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+    createBookingMutation.mutate({
+      customerId: selectedCustomerId,
+      roomId: selectedRoomId,
+      checkIn: checkInDate,
+      checkOut: checkOutDate,
+      adults: parseInt(adults),
+      children: parseInt(children),
+      advancePayment: parseFloat(advancePayment) || 0,
+      notes: bookingNotes,
+    });
+  };
+
+  const handleCreateCustomer = () => {
+    if (!newCustomerName || !newCustomerPhone) {
+      toast.error('Name and phone are required');
+      return;
+    }
+    createCustomerMutation.mutate({
+      name: newCustomerName,
+      phone: newCustomerPhone,
+      email: newCustomerEmail,
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Bookings</h2>
+          <p className="text-sm text-muted-foreground">{totalBookings} total bookings</p>
+        </div>
+        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          New Booking
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search guest or room..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="RESERVED">Reserved</SelectItem>
+            <SelectItem value="CHECKED_IN">Checked In</SelectItem>
+            <SelectItem value="CHECKED_OUT">Checked Out</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Bookings Table */}
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-lg" />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border max-h-[600px] overflow-y-auto custom-scrollbar">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 sticky top-0">
+              <tr>
+                <th className="text-left p-3 font-medium">Guest</th>
+                <th className="text-left p-3 font-medium">Room</th>
+                <th className="text-left p-3 font-medium">Check-in</th>
+                <th className="text-left p-3 font-medium">Check-out</th>
+                <th className="text-left p-3 font-medium">Status</th>
+                <th className="text-right p-3 font-medium">Total</th>
+                <th className="text-right p-3 font-medium">Due</th>
+                <th className="text-left p-3 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBookings.map((booking) => (
+                <tr key={booking.id} className="border-t hover:bg-muted/30">
+                  <td className="p-3">
+                    <div>
+                      <p className="font-medium">{booking.customer?.name}</p>
+                      <p className="text-xs text-muted-foreground">{booking.customer?.phone}</p>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <div>
+                      <p className="font-medium">{booking.room?.roomNumber}</p>
+                      <p className="text-xs text-muted-foreground">{booking.room?.type?.name}</p>
+                    </div>
+                  </td>
+                  <td className="p-3 text-xs">{format(new Date(booking.checkIn), 'MMM dd, yyyy')}</td>
+                  <td className="p-3 text-xs">{format(new Date(booking.checkOut), 'MMM dd, yyyy')}</td>
+                  <td className="p-3"><StatusBadge status={booking.status} /></td>
+                  <td className="p-3 text-right font-medium">৳{booking.totalRoomCharge.toLocaleString()}</td>
+                  <td className="p-3 text-right">
+                    <span className={booking.dueAmount > 0 ? 'text-red-600 font-medium' : 'text-emerald-600'}>
+                      ৳{booking.dueAmount.toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-1">
+                      {booking.status === 'RESERVED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => checkInMutation.mutate(booking.id)}
+                          disabled={checkInMutation.isPending}
+                        >
+                          <LogIn className="w-3 h-3 mr-1" />
+                          Check-in
+                        </Button>
+                      )}
+                      {booking.status === 'CHECKED_IN' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs border-slate-500 text-slate-600 hover:bg-slate-50"
+                          onClick={() => checkOutMutation.mutate(booking.id)}
+                          disabled={checkOutMutation.isPending}
+                        >
+                          <LogOut className="w-3 h-3 mr-1" />
+                          Check-out
+                        </Button>
+                      )}
+                      {(booking.status === 'RESERVED' || booking.status === 'CHECKED_IN') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-red-500 hover:text-red-600"
+                          onClick={() => toast.error('Cancel booking - confirmation needed')}
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredBookings.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">No bookings found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+            Next
+          </Button>
+        </div>
+      )}
+
+      {/* Create Booking Dialog (Multi-step) */}
+      <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!open) closeCreateDialog(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Booking - Step {step} of 4</DialogTitle>
+          </DialogHeader>
+
+          {/* Step indicators */}
+          <div className="flex items-center gap-2 mb-4">
+            {[1, 2, 3, 4].map((s) => (
+              <div key={s} className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                  step >= s ? 'bg-amber-600 text-white' : 'bg-muted text-muted-foreground'
+                }`}>
+                  {s}
+                </div>
+                {s < 4 && <div className={`w-8 h-0.5 ${step > s ? 'bg-amber-600' : 'bg-muted'}`} />}
+              </div>
+            ))}
+          </div>
+
+          {/* Step 1: Select Customer */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <Label>Select Customer</Label>
+              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose existing customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} - {c.phone}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {!showNewCustomer ? (
+                <Button variant="outline" size="sm" onClick={() => setShowNewCustomer(true)}>
+                  + Create New Customer
+                </Button>
+              ) : (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <p className="text-sm font-medium">New Customer</p>
+                    <Input placeholder="Full Name" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} />
+                    <Input placeholder="Phone Number" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} />
+                    <Input placeholder="Email (optional)" value={newCustomerEmail} onChange={(e) => setNewCustomerEmail(e.target.value)} />
+                    <Button size="sm" onClick={handleCreateCustomer} disabled={createCustomerMutation.isPending}>
+                      {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Select Room & Dates */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Room</Label>
+                <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose available room" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableRooms.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        Room {r.roomNumber} - {r.type.name} (৳{r.type.basePrice}/night)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Check-in Date</Label>
+                  <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Check-out Date</Label>
+                  <Input type="date" value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Adults</Label>
+                  <Input type="number" value={adults} onChange={(e) => setAdults(e.target.value)} min="1" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Children</Label>
+                  <Input type="number" value={children} onChange={(e) => setChildren(e.target.value)} min="0" />
+                </div>
+              </div>
+              {estimatedCost() > 0 && (
+                <Card className="bg-amber-50 border-amber-200">
+                  <CardContent className="p-3">
+                    <p className="text-sm font-medium text-amber-800">Estimated Cost: ৳{estimatedCost().toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Payment */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Advance Payment (BDT)</Label>
+                <Input
+                  type="number"
+                  value={advancePayment}
+                  onChange={(e) => setAdvancePayment(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <Card className="bg-muted/50">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Total Room Charge</span>
+                    <span className="font-medium">৳{estimatedCost().toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Advance Payment</span>
+                    <span className="font-medium">৳{(parseFloat(advancePayment) || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold border-t pt-2">
+                    <span>Due Amount</span>
+                    <span className="text-red-600">৳{(estimatedCost() - (parseFloat(advancePayment) || 0)).toLocaleString()}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea value={bookingNotes} onChange={(e) => setBookingNotes(e.target.value)} placeholder="Special requests..." rows={2} />
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Confirm */}
+          {step === 4 && (
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <h3 className="font-semibold">Booking Summary</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Customer</span>
+                  <span className="font-medium">{customers.find((c) => c.id === selectedCustomerId)?.name || 'N/A'}</span>
+                  <span className="text-muted-foreground">Room</span>
+                  <span className="font-medium">{availableRooms.find((r) => r.id === selectedRoomId)?.roomNumber || 'N/A'}</span>
+                  <span className="text-muted-foreground">Check-in</span>
+                  <span className="font-medium">{checkInDate ? format(new Date(checkInDate), 'MMM dd, yyyy') : 'N/A'}</span>
+                  <span className="text-muted-foreground">Check-out</span>
+                  <span className="font-medium">{checkOutDate ? format(new Date(checkOutDate), 'MMM dd, yyyy') : 'N/A'}</span>
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-medium">৳{estimatedCost().toLocaleString()}</span>
+                  <span className="text-muted-foreground">Advance</span>
+                  <span className="font-medium">৳{(parseFloat(advancePayment) || 0).toLocaleString()}</span>
+                  <span className="text-muted-foreground">Due</span>
+                  <span className="font-bold text-red-600">৳{(estimatedCost() - (parseFloat(advancePayment) || 0)).toLocaleString()}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <DialogFooter>
+            {step > 1 && (
+              <Button variant="outline" onClick={() => setStep(step - 1)}>Back</Button>
+            )}
+            {step < 4 ? (
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => setStep(step + 1)}
+                disabled={step === 1 && !selectedCustomerId}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleCreateBooking}
+                disabled={createBookingMutation.isPending}
+              >
+                {createBookingMutation.isPending ? 'Creating...' : 'Confirm Booking'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
