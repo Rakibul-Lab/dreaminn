@@ -19,7 +19,13 @@ export async function GET(
       where: { id },
       include: {
         booking: {
-          include: {
+          select: {
+            id: true,
+            checkIn: true,
+            checkOut: true,
+            status: true,
+            vatApplied: true,
+            vatPercent: true,
             customer: true,
             room: {
               include: { type: true },
@@ -57,11 +63,10 @@ export async function GET(
       return notFoundResponse('Invoice');
     }
 
-    let declaredVatPercent = 15;
-    const vatSetting = await db.setting.findUnique({ where: { key: 'vat_percent' } });
-    if (vatSetting) {
-      declaredVatPercent = parseFloat(vatSetting.value) || 15;
-    }
+    const declaredVatPercent =
+      invoice.booking.vatApplied === false
+        ? 0
+        : Math.max(0, invoice.booking.vatPercent ?? 15);
 
     return successResponse({
       ...invoice,

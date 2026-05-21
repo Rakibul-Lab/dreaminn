@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Bell, Search, LogOut, User, Menu } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuthStore } from '@/lib/auth-store';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
@@ -47,18 +48,29 @@ export function Header({ activeView, onToggleSidebar }: HeaderProps) {
 
   const { data: notifData } = useQuery({
     queryKey: ['notifications-count'],
-    queryFn: () => api.get<{ success: boolean; meta?: { total: number } }>('/notifications?limit=1'),
-    refetchInterval: 2000,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{ success: boolean; meta?: { unreadCount?: number } }>(
+          '/notifications?limit=1'
+        )
+        if (res?.success) return res
+      } catch {
+        // ignore transient dev 404s while routes compile
+      }
+      return { success: true, meta: { unreadCount: 0 } }
+    },
+    refetchInterval: 30_000,
+    retry: 1,
   });
 
-  const unreadCount = notifData?.meta?.total || 0;
+  const unreadCount = notifData?.meta?.unreadCount ?? 0;
 
   const getInitials = (name: string) => {
     return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
-    <header className="h-16 border-b bg-white flex items-center gap-4 px-4 lg:px-6 shrink-0">
+    <header className="h-16 border-b bg-card flex items-center gap-4 px-4 lg:px-6 shrink-0">
       {/* Mobile menu toggle */}
       <Button
         variant="ghost"
@@ -71,7 +83,7 @@ export function Header({ activeView, onToggleSidebar }: HeaderProps) {
 
       {/* Page title */}
       <div className="flex-1 min-w-0">
-        <h1 className="text-lg font-semibold text-slate-900 truncate">
+        <h1 className="text-lg font-semibold text-foreground truncate">
           {viewTitles[activeView] || 'Dashboard'}
         </h1>
       </div>
@@ -85,11 +97,13 @@ export function Header({ activeView, onToggleSidebar }: HeaderProps) {
         />
       </div>
 
+      <ThemeToggle />
+
       {/* Notifications */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="relative">
-            <Bell className="w-5 h-5 text-slate-600" />
+            <Bell className="w-5 h-5 text-muted-foreground" />
             {unreadCount > 0 && (
               <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-[10px] border-0">
                 {unreadCount > 9 ? '9+' : unreadCount}

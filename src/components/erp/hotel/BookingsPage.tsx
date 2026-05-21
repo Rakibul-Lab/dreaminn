@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,8 +20,17 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Plus, Search, LogIn, LogOut, XCircle, Eye, DollarSign, Receipt } from 'lucide-react';
-import Image from 'next/image';
+import { Plus, Search, LogIn, LogOut, XCircle, Receipt, FileText, CalendarRange } from 'lucide-react';
+import { AdjustStayDialog } from './AdjustStayDialog';
+import { openNewReservationTab } from '@/lib/reservation-navigation';
+import { openCheckoutTab } from '@/lib/checkout-navigation';
+import { formatBdt } from '@/lib/currency';
+import { getPaginationPages } from '@/lib/pagination-pages';
+import { cn } from '@/lib/utils';
+import { PAYMENT_METHOD_OPTIONS_WITH_PAYMENT } from '@/lib/payment-method';
+import { computeRefundFromInput } from '@/lib/booking-totals';
+import { Switch } from '@/components/ui/switch';
+import { useHotelTimes } from '@/hooks/use-hotel-times';
 
 interface Booking {
   id: string;
@@ -36,146 +45,85 @@ interface Booking {
   children: number;
   totalRoomCharge: number;
   advancePayment: number;
+  initialPayment?: number;
   dueAmount: number;
+  vatPercent?: number;
+  vatAmount?: number;
+  totalWithVat?: number;
   notes?: string | null;
   customer: { id: string; name: string; phone: string; email?: string };
   room: { id: string; roomNumber: string; type: { name: string; basePrice: number } };
 }
 
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  email?: string;
-}
-
-interface Room {
-  id: string;
-  roomNumber: string;
-  status: string;
-  type: { name: string; basePrice: number };
-}
-
-interface CheckoutPreview {
+interface CancelPreview {
   bookingId: string;
   customerName: string;
   roomNumber: string;
-  roomCharges: number;
-  foodCharges: number;
-  extraCharges: number;
-  subtotal: number;
-  discount: number;
-  vatPercent: number;
-  vatAmount: number;
-  totalAmount: number;
-  totalPaid: number;
-  dueBeforeSettlement: number;
-  lateCheckoutCharge: number;
+  status: string;
+  checkIn?: string;
+  checkOut?: string;
+  bookedNights?: number;
+  maxRefundable: number;
+  totalWithVat: number;
+  dueAmount: number;
 }
 
 export function BookingsPage() {
   const queryClient = useQueryClient();
+  const { formatCheckIn, formatCheckOut } = useHotelTimes();
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [step, setStep] = useState(1);
-
-  // Create booking form state
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [selectedRoomId, setSelectedRoomId] = useState('');
-  const [checkInDate, setCheckInDate] = useState('');
-  const [checkOutDate, setCheckOutDate] = useState('');
-  const [adults, setAdults] = useState('1');
-  const [children, setChildren] = useState('0');
-  const [advancePayment, setAdvancePayment] = useState('0');
-  const [bookingNotes, setBookingNotes] = useState('');
-
-  // New customer form
-  const [newCustomerName, setNewCustomerName] = useState('');
-  const [newCustomerPhone, setNewCustomerPhone] = useState('');
-  const [newCustomerEmail, setNewCustomerEmail] = useState('');
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-
+  const [pageSize, setPageSize] = useState(10);
   // Check-in dialog state
   const [checkInDialogOpen, setCheckInDialogOpen] = useState(false);
   const [checkInBookingId, setCheckInBookingId] = useState<string | null>(null);
   const [checkInPayment, setCheckInPayment] = useState('0');
   const [checkInPaymentMethod, setCheckInPaymentMethod] = useState('CASH');
-  const [checkOutDialogOpen, setCheckOutDialogOpen] = useState(false);
-  const [checkOutBookingId, setCheckOutBookingId] = useState<string | null>(null);
-  const [checkOutPayment, setCheckOutPayment] = useState('0');
-  const [checkOutPaymentMethod, setCheckOutPaymentMethod] = useState('CASH');
-  const [checkOutPaymentReference, setCheckOutPaymentReference] = useState('');
-  const [checkOutPaymentNotes, setCheckOutPaymentNotes] = useState('');
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
+  const [refundEnabled, setRefundEnabled] = useState(false);
+  const [refundMode, setRefundMode] = useState<'percent' | 'amount'>('percent');
+  const [refundPercent, setRefundPercent] = useState('100');
+  const [refundAmount, setRefundAmount] = useState('0');
+  const [refundMethod, setRefundMethod] = useState('CASH');
+  const [cancelReason, setCancelReason] = useState('');
+  const [adjustStayDialogOpen, setAdjustStayDialogOpen] = useState(false);
+  const [adjustStayBookingId, setAdjustStayBookingId] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const buildQuery = () => {
-    const params: string[] = [`page=${page}`, 'limit=20'];
+    const params: string[] = [`page=${page}`, `limit=${pageSize}`];
     if (statusFilter !== 'all') params.push(`status=${statusFilter}`);
+    if (searchQuery) params.push(`search=${encodeURIComponent(searchQuery)}`);
     return `/bookings?${params.join('&')}`;
   };
 
   const { data: bookingsData, isLoading } = useQuery({
-    queryKey: ['bookings', statusFilter, page],
+    queryKey: ['bookings', statusFilter, page, pageSize, searchQuery],
     queryFn: () => api.get<{ success: boolean; data: Booking[]; meta: { total: number; page: number; totalPages: number } }>(buildQuery()),
   });
 
-  const { data: customersData } = useQuery({
-    queryKey: ['customers-list'],
-    queryFn: () => api.get<{ success: boolean; data: Customer[] }>('/customers?limit=100'),
-  });
-
-  const { data: roomsData } = useQuery({
-    queryKey: ['available-rooms'],
-    queryFn: () => api.get<{ success: boolean; data: Room[] }>('/rooms?status=AVAILABLE&limit=100'),
-  });
-
-  const { data: checkoutPreviewData } = useQuery({
-    queryKey: ['checkout-preview', checkOutBookingId],
+  const { data: cancelPreviewData, isLoading: cancelPreviewLoading } = useQuery({
+    queryKey: ['cancel-preview', cancelBookingId],
     queryFn: () =>
-      api.get<{ success: boolean; data: CheckoutPreview }>(
-        `/bookings/check-out/${checkOutBookingId}`
-      ),
-    enabled: !!checkOutBookingId && checkOutDialogOpen,
+      api.get<{ success: boolean; data: CancelPreview }>(`/bookings/cancel/${cancelBookingId}`),
+    enabled: !!cancelBookingId && cancelDialogOpen,
   });
 
   const bookings = ((bookingsData as any)?.data || []) as Booking[];
   const totalBookings = (bookingsData as any)?.meta?.total || 0;
-  const totalPages = (bookingsData as any)?.meta?.totalPages || 1;
-  const customers = ((customersData as any)?.data || []) as Customer[];
-  const availableRooms = ((roomsData as any)?.data || []) as Room[];
-
-  const filteredBookings = search
-    ? bookings.filter(
-        (b) =>
-          b.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
-          b.room?.roomNumber?.includes(search) ||
-          b.id.includes(search)
-      )
-    : bookings;
-
-  // Calculate estimated cost
-  const estimatedCost = () => {
-    if (!checkInDate || !checkOutDate || !selectedRoomId) return 0;
-    const room = availableRooms.find((r) => r.id === selectedRoomId);
-    if (!room) return 0;
-    const diff = Math.ceil((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(diff, 0) * room.type.basePrice;
-  };
-
-  const createBookingMutation = useMutation({
-    mutationFn: (data: any) => api.post('/bookings', data),
-    onSuccess: (res: any) => {
-      if (!res?.success) {
-        toast.error(res?.error || res?.message || 'Failed to create booking');
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      toast.success('Booking created successfully');
-      closeCreateDialog();
-    },
-    onError: () => toast.error('Failed to create booking'),
-  });
+  const totalPages = Math.max((bookingsData as any)?.meta?.totalPages || 1, 1);
+  const rangeStart = totalBookings === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalBookings);
+  const pageNumbers = getPaginationPages(page, totalPages);
 
   const checkInMutation = useMutation({
     mutationFn: ({ id, initialPayment, paymentMethod }: { id: string; initialPayment: number; paymentMethod: string }) =>
@@ -186,6 +134,9 @@ export function BookingsPage() {
         return;
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['available-rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['rooms'] });
       toast.success('Guest checked in successfully');
       setCheckInDialogOpen(false);
       setCheckInBookingId(null);
@@ -195,59 +146,45 @@ export function BookingsPage() {
     onError: () => toast.error('Failed to check in'),
   });
 
-  const checkOutMutation = useMutation({
-    mutationFn: ({
-      id,
-      finalPayment,
-      paymentMethod,
-      paymentReference,
-      paymentNotes,
-    }: {
+  const cancelMutation = useMutation({
+    mutationFn: (payload: {
       id: string;
-      finalPayment: number;
-      paymentMethod: string;
-      paymentReference?: string;
-      paymentNotes?: string;
+      refundEnabled: boolean;
+      refundMode: 'percent' | 'amount';
+      refundPercent: number;
+      refundAmount: number;
+      refundMethod: string;
+      reason?: string;
     }) =>
-      api.post(`/bookings/check-out/${id}`, {
-        finalPayment,
-        paymentMethod,
-        paymentReference,
-        paymentNotes,
+      api.post(`/bookings/cancel/${payload.id}`, {
+        refundEnabled: payload.refundEnabled,
+        refundMode: payload.refundMode,
+        refundPercent: payload.refundPercent,
+        refundAmount: payload.refundAmount,
+        refundMethod: payload.refundMethod,
+        reason: payload.reason,
       }),
     onSuccess: (res: any) => {
       if (!res?.success) {
-        toast.error(res?.error || res?.message || 'Failed to check out');
+        toast.error(res?.error || res?.message || 'Failed to cancel reservation');
         return;
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      setCheckOutDialogOpen(false);
-      setCheckOutBookingId(null);
-      setCheckOutPayment('0');
-      setCheckOutPaymentMethod('CASH');
-      setCheckOutPaymentReference('');
-      setCheckOutPaymentNotes('');
-      toast.success('Guest checked out and invoice generated successfully');
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['available-rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast.success(res.message || 'Reservation cancelled');
+      setCancelDialogOpen(false);
+      setCancelBookingId(null);
+      setRefundEnabled(false);
+      setRefundMode('percent');
+      setRefundPercent('100');
+      setRefundAmount('0');
+      setRefundMethod('CASH');
+      setCancelReason('');
     },
-    onError: () => toast.error('Failed to check out'),
-  });
-
-  const createCustomerMutation = useMutation({
-    mutationFn: (data: any) => api.post('/customers', data),
-    onSuccess: (res: any) => {
-      if (!res?.success) {
-        toast.error(res?.error || res?.message || 'Failed to create customer');
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['customers-list'] });
-      if (res.success && res.data) {
-        setSelectedCustomerId(res.data.id);
-      }
-      toast.success('Customer created');
-      setShowNewCustomer(false);
-    },
-    onError: () => toast.error('Failed to create customer'),
+    onError: () => toast.error('Failed to cancel reservation'),
   });
 
   const generateInvoiceMutation = useMutation({
@@ -267,74 +204,40 @@ export function BookingsPage() {
     onError: () => toast.error('Failed to generate invoice'),
   });
 
-  const closeCreateDialog = () => {
-    setCreateDialogOpen(false);
-    setStep(1);
-    setSelectedCustomerId('');
-    setSelectedRoomId('');
-    setCheckInDate('');
-    setCheckOutDate('');
-    setAdults('1');
-    setChildren('0');
-    setAdvancePayment('0');
-    setBookingNotes('');
-    setNewCustomerName('');
-    setNewCustomerPhone('');
-    setNewCustomerEmail('');
-    setShowNewCustomer(false);
+  const cancelPreview = (cancelPreviewData as any)?.data as CancelPreview | undefined;
+  const maxRefundable = cancelPreview?.maxRefundable ?? 0;
+  const computedRefundTotal = useMemo(() => {
+    if (!refundEnabled || maxRefundable <= 0) return 0;
+    return computeRefundFromInput(
+      maxRefundable,
+      refundMode,
+      parseFloat(refundPercent) || 0,
+      parseFloat(refundAmount) || 0
+    );
+  }, [refundEnabled, maxRefundable, refundMode, refundPercent, refundAmount]);
+
+  const openCancelDialog = (bookingId: string) => {
+    setCancelBookingId(bookingId);
+    setRefundEnabled(false);
+    setRefundMode('percent');
+    setRefundPercent('100');
+    setRefundAmount('0');
+    setRefundMethod('CASH');
+    setCancelReason('');
+    setCancelDialogOpen(true);
   };
-
-  const handleCreateBooking = () => {
-    if (!selectedCustomerId || !selectedRoomId || !checkInDate || !checkOutDate) {
-      toast.error('Please fill all required fields');
-      return;
-    }
-    createBookingMutation.mutate({
-      customerId: selectedCustomerId,
-      roomId: selectedRoomId,
-      checkIn: checkInDate,
-      checkOut: checkOutDate,
-      adults: parseInt(adults),
-      children: parseInt(children),
-      advancePayment: parseFloat(advancePayment) || 0,
-      notes: bookingNotes,
-    });
-  };
-
-  const handleCreateCustomer = () => {
-    if (!newCustomerName || !newCustomerPhone) {
-      toast.error('Name and phone are required');
-      return;
-    }
-    createCustomerMutation.mutate({
-      name: newCustomerName,
-      phone: newCustomerPhone,
-      email: newCustomerEmail,
-    });
-  };
-
-  const selectedCheckOutBooking = bookings.find((bk) => bk.id === checkOutBookingId) || null;
-  const checkoutPreview = (checkoutPreviewData as any)?.data as CheckoutPreview | undefined;
-  const checkOutDue = checkoutPreview?.dueBeforeSettlement ?? selectedCheckOutBooking?.dueAmount ?? 0;
-  const checkOutPaymentAmount = parseFloat(checkOutPayment) || 0;
-  const checkOutRemaining = Math.max(checkOutDue - checkOutPaymentAmount, 0);
-
-  useEffect(() => {
-    if (!checkOutDialogOpen) return;
-    setCheckOutPayment(String(checkOutDue || 0));
-  }, [checkOutDialogOpen, checkOutDue]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Bookings</h2>
-          <p className="text-sm text-muted-foreground">{totalBookings} total bookings</p>
+          <h2 className="text-xl font-semibold">Reservations</h2>
+          <p className="text-sm text-muted-foreground">{totalBookings} total reservations</p>
         </div>
-        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setCreateDialogOpen(true)}>
+        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={openNewReservationTab}>
           <Plus className="w-4 h-4 mr-2" />
-          New Booking
+          New Reservation
         </Button>
       </div>
 
@@ -343,9 +246,9 @@ export function BookingsPage() {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search guest or room..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search guest, phone, or room..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -365,29 +268,31 @@ export function BookingsPage() {
 
       {/* Bookings Table */}
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 rounded-lg" />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            {Array.from({ length: pageSize }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-lg" />
+            ))}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="rounded-lg border max-h-[600px] overflow-y-auto custom-scrollbar">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 sticky top-0">
-              <tr>
-                <th className="text-left p-3 font-medium">Guest</th>
-                <th className="text-left p-3 font-medium">Room</th>
-                <th className="text-left p-3 font-medium">Check-in</th>
-                <th className="text-left p-3 font-medium">Check-out</th>
-                <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-right p-3 font-medium">Total</th>
-                <th className="text-right p-3 font-medium">Due</th>
-                <th className="text-left p-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredBookings.map((booking) => (
-                <tr key={booking.id} className="border-t hover:bg-muted/30">
+        <div className="rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+            <table className="bookings-sticky-table w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="p-3 text-left font-medium">Guest</th>
+                  <th className="p-3 text-left font-medium">Room</th>
+                  <th className="p-3 text-left font-medium">Check-in</th>
+                  <th className="p-3 text-left font-medium">Check-out</th>
+                  <th className="p-3 text-left font-medium">Status</th>
+                  <th className="p-3 text-right font-medium">Total (incl. VAT)</th>
+                  <th className="p-3 text-right font-medium">Due (incl. VAT)</th>
+                  <th className="p-3 text-left font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-background">
+              {bookings.map((booking) => (
+                <tr key={booking.id} className="border-b border-border/60 hover:bg-muted/40">
                   <td className="p-3">
                     <div>
                       <p className="font-medium">{booking.customer?.name}</p>
@@ -400,13 +305,22 @@ export function BookingsPage() {
                       <p className="text-xs text-muted-foreground">{booking.room?.type?.name}</p>
                     </div>
                   </td>
-                  <td className="p-3 text-xs">{format(new Date(booking.checkIn), 'MMM dd, yyyy')}</td>
-                  <td className="p-3 text-xs">{format(new Date(booking.checkOut), 'MMM dd, yyyy')}</td>
+                  <td className="p-3 text-xs">{formatCheckIn(booking.checkIn)}</td>
+                  <td className="p-3 text-xs">{formatCheckOut(booking.checkOut)}</td>
                   <td className="p-3"><StatusBadge status={booking.status} /></td>
-                  <td className="p-3 text-right font-medium">৳{booking.totalRoomCharge.toLocaleString()}</td>
+                  <td className="p-3 text-right">
+                    <p className="font-medium">
+                      {formatBdt(booking.totalWithVat ?? booking.totalRoomCharge)}
+                    </p>
+                    {booking.vatAmount != null && booking.vatPercent != null && (
+                      <p className="text-[10px] text-muted-foreground">
+                        VAT {booking.vatPercent}%: {formatBdt(booking.vatAmount)}
+                      </p>
+                    )}
+                  </td>
                   <td className="p-3 text-right">
                     <span className={booking.dueAmount > 0 ? 'text-red-600 font-medium' : 'text-emerald-600'}>
-                      ৳{booking.dueAmount.toLocaleString()}
+                      {formatBdt(booking.dueAmount)}
                     </span>
                   </td>
                   <td className="p-3">
@@ -429,34 +343,53 @@ export function BookingsPage() {
                         </Button>
                       )}
                       {booking.status === 'CHECKED_IN' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs border-slate-500 text-slate-600 hover:bg-slate-50"
-                          onClick={() => {
-                            setCheckOutBookingId(booking.id);
-                            setCheckOutPayment(String(booking.dueAmount || 0));
-                            setCheckOutPaymentMethod('CASH');
-                            setCheckOutPaymentReference('');
-                            setCheckOutPaymentNotes('');
-                            setCheckOutDialogOpen(true);
-                          }}
-                          disabled={checkOutMutation.isPending}
-                        >
-                          <LogOut className="w-3 h-3 mr-1" />
-                          Check-out
-                        </Button>
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs border-border text-muted-foreground hover:bg-muted"
+                            onClick={() => openCheckoutTab(booking.id)}
+                          >
+                            <LogOut className="w-3 h-3 mr-1" />
+                            Check-out
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs border-amber-500 text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                            onClick={() => {
+                              setAdjustStayBookingId(booking.id);
+                              setAdjustStayDialogOpen(true);
+                            }}
+                            title="Adjust nights, early checkout fee, and room due"
+                          >
+                            <CalendarRange className="w-3 h-3 mr-1" />
+                            Adjust stay
+                          </Button>
+                        </>
                       )}
-                      {(booking.status === 'RESERVED' || booking.status === 'CHECKED_IN') && (
+                      {booking.status === 'RESERVED' && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs text-red-500 hover:text-red-600"
-                          onClick={() => toast.error('Cancel booking - confirmation needed')}
+                          onClick={() => openCancelDialog(booking.id)}
+                          disabled={cancelMutation.isPending}
+                          title="Cancel reservation"
                         >
                           <XCircle className="w-3 h-3" />
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs border-sky-500 text-sky-700 hover:bg-sky-50"
+                        onClick={() => window.open(`/reservation/${booking.id}`, '_blank', 'noopener,noreferrer')}
+                        title="Print / download reservation PDF"
+                      >
+                        <FileText className="w-3 h-3 mr-1" />
+                        Reservation
+                      </Button>
                       {(booking.status === 'CHECKED_OUT' || booking.status === 'CHECKED_IN') && (
                         <Button
                           variant="outline"
@@ -473,26 +406,84 @@ export function BookingsPage() {
                   </td>
                 </tr>
               ))}
-              {filteredBookings.length === 0 && (
+              {bookings.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-muted-foreground">No bookings found</td>
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">No reservations found</td>
                 </tr>
               )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-            Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-            Next
-          </Button>
+              </tbody>
+            </table>
+          <div className="flex flex-col gap-3 border-t bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {totalBookings === 0
+                ? 'No results'
+                : `Showing ${rangeStart}â€“${rangeEnd} of ${totalBookings}`}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[110px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <div className="flex flex-wrap items-center gap-1">
+                {pageNumbers.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="flex h-8 min-w-8 items-center justify-center px-1 text-sm text-muted-foreground"
+                    >
+                      â€¦
+                    </span>
+                  ) : (
+                    <Button
+                      key={item}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        'h-8 min-w-8 px-2',
+                        item === page &&
+                          'border-amber-600 bg-amber-600 text-white hover:bg-amber-700 hover:text-white'
+                      )}
+                      onClick={() => setPage(item)}
+                      aria-current={item === page ? 'page' : undefined}
+                    >
+                      {item}
+                    </Button>
+                  )
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -509,25 +500,44 @@ export function BookingsPage() {
             <Card className="bg-muted/50">
               <CardContent className="p-3 space-y-1">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total Room Charge</span>
-                  <span className="font-medium">৳{(() => {
+                  <span className="text-muted-foreground">Room charge</span>
+                  <span className="font-medium">{formatBdt((() => {
                     const b = bookings.find(bk => bk.id === checkInBookingId);
-                    return b ? b.totalRoomCharge.toLocaleString() : '0';
-                  })()}</span>
+                    return b ? b.totalRoomCharge : 0;
+                  })())}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Advance Paid</span>
-                  <span className="font-medium">৳{(() => {
+                  <span className="text-muted-foreground">
+                    VAT ({(() => {
+                      const b = bookings.find(bk => bk.id === checkInBookingId);
+                      return b?.vatPercent ?? 15;
+                    })()}%)
+                  </span>
+                  <span className="font-medium">{formatBdt((() => {
                     const b = bookings.find(bk => bk.id === checkInBookingId);
-                    return b ? b.advancePayment.toLocaleString() : '0';
-                  })()}</span>
+                    return b?.vatAmount ?? 0;
+                  })())}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total (incl. VAT)</span>
+                  <span className="font-medium">{formatBdt((() => {
+                    const b = bookings.find(bk => bk.id === checkInBookingId);
+                    return b?.totalWithVat ?? b?.totalRoomCharge ?? 0;
+                  })())}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Advance paid</span>
+                  <span className="font-medium">{formatBdt((() => {
+                    const b = bookings.find(bk => bk.id === checkInBookingId);
+                    return b ? b.advancePayment : 0;
+                  })())}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold border-t pt-1">
-                  <span>Current Due</span>
-                  <span className="text-red-600">৳{(() => {
+                  <span>Current due (incl. VAT)</span>
+                  <span className="text-red-600">{formatBdt((() => {
                     const b = bookings.find(bk => bk.id === checkInBookingId);
-                    return b ? b.dueAmount.toLocaleString() : '0';
-                  })()}</span>
+                    return b ? b.dueAmount : 0;
+                  })())}</span>
                 </div>
               </CardContent>
             </Card>
@@ -541,11 +551,11 @@ export function BookingsPage() {
                 min="0"
               />
               <p className="text-xs text-muted-foreground">
-                Remaining due after payment: ৳{(() => {
+                Remaining due after payment: {formatBdt((() => {
                   const b = bookings.find(bk => bk.id === checkInBookingId);
                   const due = b ? b.dueAmount - (parseFloat(checkInPayment) || 0) : 0;
-                  return Math.max(due, 0).toLocaleString();
-                })()}
+                  return Math.max(due, 0);
+                })())}
               </p>
             </div>
             <div className="space-y-2">
@@ -555,9 +565,11 @@ export function BookingsPage() {
                   <SelectValue placeholder="Select method" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CASH">Cash</SelectItem>
-                  <SelectItem value="CARD">Card</SelectItem>
-                  <SelectItem value="MOBILE_BANKING">Mobile Banking</SelectItem>
+                  {PAYMENT_METHOD_OPTIONS_WITH_PAYMENT.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -582,346 +594,208 @@ export function BookingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Check-out Settlement Dialog */}
-      <Dialog open={checkOutDialogOpen} onOpenChange={setCheckOutDialogOpen}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden max-h-[78vh] flex flex-col">
-          <DialogHeader className="border-b bg-slate-50 px-6 py-4">
-            <DialogTitle className="flex items-center gap-2">
-              <LogOut className="h-5 w-5 text-slate-700" />
-              Final Check-out & Invoice Settlement
+      <AdjustStayDialog
+        bookingId={adjustStayBookingId}
+        open={adjustStayDialogOpen}
+        onOpenChange={(open) => {
+          setAdjustStayDialogOpen(open);
+          if (!open) setAdjustStayBookingId(null);
+        }}
+      />
+
+      {/* Cancel reservation */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Cancel reservation
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            <Card className="border-amber-200 bg-gradient-to-r from-amber-50 to-emerald-50">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 overflow-hidden rounded-lg border bg-white">
-                      <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={40} height={40} className="h-full w-full object-cover" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">RRP Dream Inn</p>
-                      <p className="text-xs text-slate-500">Professional Final Settlement Invoice</p>
-                    </div>
-                  </div>
-                  <StatusBadge status="CHECKED_IN" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Invoice Details</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-2 text-sm">
-                <div className="grid grid-cols-2 gap-2">
-                  <p className="text-muted-foreground">Guest</p>
-                  <p className="font-medium text-right">{selectedCheckOutBooking?.customer?.name || '-'}</p>
-                  <p className="text-muted-foreground">Room</p>
-                  <p className="font-medium text-right">{selectedCheckOutBooking?.room?.roomNumber || '-'}</p>
-                  <p className="text-muted-foreground">Check-in</p>
-                  <p className="font-medium text-right">
-                    {selectedCheckOutBooking ? format(new Date(selectedCheckOutBooking.checkIn), 'MMM dd, yyyy') : '-'}
-                  </p>
-                  <p className="text-muted-foreground">Scheduled Check-out</p>
-                  <p className="font-medium text-right">
-                    {selectedCheckOutBooking ? format(new Date(selectedCheckOutBooking.checkOut), 'MMM dd, yyyy') : '-'}
-                  </p>
-                  <p className="text-muted-foreground">Room Charges</p>
-                  <p className="font-medium text-right">৳{(checkoutPreview?.roomCharges ?? selectedCheckOutBooking?.totalRoomCharge ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Restaurant Bill</p>
-                  <p className="font-medium text-right">৳{(checkoutPreview?.foodCharges ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Extra Charges</p>
-                  <p className="font-medium text-right">৳{(checkoutPreview?.extraCharges ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Subtotal</p>
-                  <p className="font-semibold text-right">৳{(checkoutPreview?.subtotal ?? selectedCheckOutBooking?.totalRoomCharge ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Discount</p>
-                  <p className="font-medium text-right text-emerald-700">৳{(checkoutPreview?.discount ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">VAT ({checkoutPreview?.vatPercent ?? 0}%)</p>
-                  <p className="font-medium text-right">৳{(checkoutPreview?.vatAmount ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Invoice Total</p>
-                  <p className="font-semibold text-right">৳{(checkoutPreview?.totalAmount ?? selectedCheckOutBooking?.totalRoomCharge ?? 0).toLocaleString()}</p>
-                  <p className="text-muted-foreground">Paid Amount</p>
-                  <p className="font-medium text-right text-emerald-700">৳{(checkoutPreview?.totalPaid ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="border-t pt-2">
+          <div className="space-y-4">
+            {cancelPreviewLoading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : cancelPreview ? (
+              <Card className="bg-muted/50 border-border">
+                <CardContent className="p-3 space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Due</span>
-                    <span className="font-semibold text-red-600">৳{checkOutDue.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Guest</span>
+                    <span className="font-medium">{cancelPreview.customerName}</span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Room</span>
+                    <span className="font-medium">{cancelPreview.roomNumber}</span>
+                  </div>
+                  {cancelPreview.bookedNights != null && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Reserved nights</span>
+                        <span className="font-medium">{cancelPreview.bookedNights} night(s)</span>
+                      </div>
+                      {cancelPreview.checkIn && cancelPreview.checkOut && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Reservation dates</span>
+                          <span className="font-medium text-right text-xs">
+                            {formatCheckIn(cancelPreview.checkIn)} â†’{' '}
+                            {formatCheckOut(cancelPreview.checkOut)}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Paid (refundable)</span>
+                    <span className="font-medium text-emerald-700">
+                      {formatBdt(cancelPreview.maxRefundable)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Final Payment (BDT) *</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={checkOutPayment}
-                  onChange={(e) => setCheckOutPayment(e.target.value)}
-                  placeholder="Enter full due amount"
-                />
+            <div className="space-y-2">
+              <Label htmlFor="cancel-reason">Reason (optional)</Label>
+              <Textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Why is this reservation being cancelled?"
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Issue refund</p>
                 <p className="text-xs text-muted-foreground">
-                  Remaining after payment: <span className={checkOutRemaining > 0 ? 'text-red-600 font-semibold' : 'text-emerald-600 font-semibold'}>৳{checkOutRemaining.toLocaleString()}</span>
+                  Off by default â€” no refund unless you turn this on
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label>Payment Method *</Label>
-                <Select value={checkOutPaymentMethod} onValueChange={setCheckOutPaymentMethod}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CARD">Card</SelectItem>
-                    <SelectItem value="MOBILE_BANKING">Mobile Banking</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Switch
+                checked={refundEnabled}
+                onCheckedChange={(checked) => {
+                  setRefundEnabled(checked);
+                  if (checked && maxRefundable > 0) {
+                    setRefundAmount(String(maxRefundable));
+                  }
+                }}
+                disabled={maxRefundable <= 0}
+              />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Transaction Reference (optional)</Label>
-                <Input
-                  value={checkOutPaymentReference}
-                  onChange={(e) => setCheckOutPaymentReference(e.target.value)}
-                  placeholder="e.g. trx-id / card auth no"
-                />
+            {refundEnabled && maxRefundable > 0 && (
+              <div className="space-y-3 rounded-lg border border-amber-200/60 bg-amber-50/40 dark:bg-amber-950/20 p-3">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={refundMode === 'percent' ? 'default' : 'outline'}
+                    className={refundMode === 'percent' ? 'bg-amber-600 hover:bg-amber-700' : ''}
+                    onClick={() => setRefundMode('percent')}
+                  >
+                    By %
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={refundMode === 'amount' ? 'default' : 'outline'}
+                    className={refundMode === 'amount' ? 'bg-amber-600 hover:bg-amber-700' : ''}
+                    onClick={() => setRefundMode('amount')}
+                  >
+                    By amount
+                  </Button>
+                </div>
+
+                {refundMode === 'percent' ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="refund-percent">Refund percentage</Label>
+                    <Input
+                      id="refund-percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={refundPercent}
+                      onChange={(e) => setRefundPercent(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="refund-amount">Refund amount (BDT)</Label>
+                    <Input
+                      id="refund-amount"
+                      type="number"
+                      min={0}
+                      max={maxRefundable}
+                      step={0.01}
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum: {formatBdt(maxRefundable)}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Refund method</Label>
+                  <Select value={refundMethod} onValueChange={setRefundMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHOD_OPTIONS_WITH_PAYMENT.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <p className="text-sm font-semibold text-foreground border-t border-border pt-2">
+                  Refund total:{' '}
+                  <span className="text-amber-700">{formatBdt(computedRefundTotal)}</span>
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label>Payment Notes (optional)</Label>
-                <Input
-                  value={checkOutPaymentNotes}
-                  onChange={(e) => setCheckOutPaymentNotes(e.target.value)}
-                  placeholder="Any settlement note"
-                />
-              </div>
-            </div>
+            )}
+
+            {refundEnabled && maxRefundable <= 0 && (
+              <p className="text-xs text-muted-foreground">
+                No payments on this reservation â€” refund is not available.
+              </p>
+            )}
           </div>
-          <DialogFooter className="border-t bg-white px-6 py-4">
-            <Button variant="outline" onClick={() => setCheckOutDialogOpen(false)}>Cancel</Button>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Keep reservation
+            </Button>
             <Button
-              className="bg-slate-800 hover:bg-slate-900 text-white"
-              disabled={
-                checkOutMutation.isPending ||
-                !checkOutBookingId ||
-                checkOutPaymentAmount <= 0 ||
-                checkOutPaymentAmount < checkOutDue
-              }
+              variant="destructive"
+              disabled={cancelMutation.isPending || !cancelBookingId}
               onClick={() => {
-                if (!checkOutBookingId) return;
-                if (checkOutPaymentAmount < checkOutDue) {
-                  toast.error('Please clear full due amount before checkout.');
+                if (!cancelBookingId) return;
+                if (refundEnabled && computedRefundTotal <= 0) {
+                  toast.error('Enter a valid refund amount or turn off refund.');
                   return;
                 }
-                checkOutMutation.mutate({
-                  id: checkOutBookingId,
-                  finalPayment: checkOutPaymentAmount,
-                  paymentMethod: checkOutPaymentMethod,
-                  paymentReference: checkOutPaymentReference || undefined,
-                  paymentNotes: checkOutPaymentNotes || undefined,
+                cancelMutation.mutate({
+                  id: cancelBookingId,
+                  refundEnabled,
+                  refundMode,
+                  refundPercent: parseFloat(refundPercent) || 0,
+                  refundAmount: parseFloat(refundAmount) || 0,
+                  refundMethod,
+                  reason: cancelReason.trim() || undefined,
                 });
               }}
             >
-              {checkOutMutation.isPending ? 'Processing Checkout...' : 'Settle Due, Generate Invoice & Check-out'}
+              {cancelMutation.isPending ? 'Cancellingâ€¦' : 'Confirm cancel'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Create Booking Dialog (Multi-step) */}
-      <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!open) closeCreateDialog(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Booking - Step {step} of 4</DialogTitle>
-          </DialogHeader>
-
-          {/* Step indicators */}
-          <div className="flex items-center gap-2 mb-4">
-            {[1, 2, 3, 4].map((s) => (
-              <div key={s} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                  step >= s ? 'bg-amber-600 text-white' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {s}
-                </div>
-                {s < 4 && <div className={`w-8 h-0.5 ${step > s ? 'bg-amber-600' : 'bg-muted'}`} />}
-              </div>
-            ))}
-          </div>
-
-          {/* Step 1: Select Customer */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <Label>Select Customer</Label>
-              <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose existing customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} - {c.phone}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {!showNewCustomer ? (
-                <Button variant="outline" size="sm" onClick={() => setShowNewCustomer(true)}>
-                  + Create New Customer
-                </Button>
-              ) : (
-                <Card>
-                  <CardContent className="p-4 space-y-3">
-                    <p className="text-sm font-medium">New Customer</p>
-                    <Input placeholder="Full Name" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} />
-                    <Input placeholder="Phone Number" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} />
-                    <Input placeholder="Email (optional)" value={newCustomerEmail} onChange={(e) => setNewCustomerEmail(e.target.value)} />
-                    <Button size="sm" onClick={handleCreateCustomer} disabled={createCustomerMutation.isPending}>
-                      {createCustomerMutation.isPending ? 'Creating...' : 'Create Customer'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Select Room & Dates */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Room</Label>
-                <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose available room" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableRooms.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        Room {r.roomNumber} - {r.type.name} (৳{r.type.basePrice}/night)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Check-in Date</Label>
-                  <Input type="date" value={checkInDate} onChange={(e) => setCheckInDate(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Check-out Date</Label>
-                  <Input type="date" value={checkOutDate} onChange={(e) => setCheckOutDate(e.target.value)} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Adults</Label>
-                  <Input type="number" value={adults} onChange={(e) => setAdults(e.target.value)} min="1" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Children</Label>
-                  <Input type="number" value={children} onChange={(e) => setChildren(e.target.value)} min="0" />
-                </div>
-              </div>
-              {estimatedCost() > 0 && (
-                <Card className="bg-amber-50 border-amber-200">
-                  <CardContent className="p-3">
-                    <p className="text-sm font-medium text-amber-800">Estimated Cost: ৳{estimatedCost().toLocaleString()}</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Step 3: Payment */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Advance Payment (BDT)</Label>
-                <Input
-                  type="number"
-                  value={advancePayment}
-                  onChange={(e) => setAdvancePayment(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <Card className="bg-muted/50">
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Total Room Charge</span>
-                    <span className="font-medium">৳{estimatedCost().toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Advance Payment</span>
-                    <span className="font-medium">৳{(parseFloat(advancePayment) || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-bold border-t pt-2">
-                    <span>Due Amount</span>
-                    <span className="text-red-600">৳{(estimatedCost() - (parseFloat(advancePayment) || 0)).toLocaleString()}</span>
-                  </div>
-                </CardContent>
-              </Card>
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea value={bookingNotes} onChange={(e) => setBookingNotes(e.target.value)} placeholder="Special requests..." rows={2} />
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Confirm */}
-          {step === 4 && (
-            <Card>
-              <CardContent className="p-4 space-y-2">
-                <h3 className="font-semibold">Booking Summary</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="text-muted-foreground">Customer</span>
-                  <span className="font-medium">{customers.find((c) => c.id === selectedCustomerId)?.name || 'N/A'}</span>
-                  <span className="text-muted-foreground">Room</span>
-                  <span className="font-medium">{availableRooms.find((r) => r.id === selectedRoomId)?.roomNumber || 'N/A'}</span>
-                  <span className="text-muted-foreground">Check-in</span>
-                  <span className="font-medium">{checkInDate ? format(new Date(checkInDate), 'MMM dd, yyyy') : 'N/A'}</span>
-                  <span className="text-muted-foreground">Check-out</span>
-                  <span className="font-medium">{checkOutDate ? format(new Date(checkOutDate), 'MMM dd, yyyy') : 'N/A'}</span>
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="font-medium">৳{estimatedCost().toLocaleString()}</span>
-                  <span className="text-muted-foreground">Advance</span>
-                  <span className="font-medium">৳{(parseFloat(advancePayment) || 0).toLocaleString()}</span>
-                  <span className="text-muted-foreground">Due</span>
-                  <span className="font-bold text-red-600">৳{(estimatedCost() - (parseFloat(advancePayment) || 0)).toLocaleString()}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <DialogFooter>
-            {step > 1 && (
-              <Button variant="outline" onClick={() => setStep(step - 1)}>Back</Button>
-            )}
-            {step < 4 ? (
-              <Button
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-                onClick={() => setStep(step + 1)}
-                disabled={step === 1 && !selectedCustomerId}
-              >
-                Next
-              </Button>
-            ) : (
-              <Button
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-                onClick={handleCreateBooking}
-                disabled={createBookingMutation.isPending}
-              >
-                {createBookingMutation.isPending ? 'Creating...' : 'Confirm Booking'}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

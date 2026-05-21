@@ -81,7 +81,7 @@ export default function ActivityLogsPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <ScrollText className="h-6 w-6 text-amber-600" />
-        <h2 className="text-2xl font-bold text-slate-800">Activity Logs</h2>
+        <h2 className="text-2xl font-bold text-foreground">Activity Logs</h2>
         <Badge variant="outline" className="ml-2">{total} total</Badge>
       </div>
 
@@ -91,7 +91,7 @@ export default function ActivityLogsPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <Select value={moduleFilter} onValueChange={(v) => { setModuleFilter(v); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2 text-slate-400" />
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Module" />
               </SelectTrigger>
               <SelectContent>
@@ -155,11 +155,11 @@ export default function ActivityLogsPage() {
                   ))
                 ) : logs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">No logs found</TableCell>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No logs found</TableCell>
                   </TableRow>
                 ) : (
                   logs.map((log) => (
-                    <TableRow key={log.id} className="hover:bg-slate-50">
+                    <TableRow key={log.id} className="hover:bg-muted">
                       <TableCell className="text-sm font-mono whitespace-nowrap">
                         {format(new Date(log.createdAt), 'MMM dd, yyyy HH:mm:ss')}
                       </TableCell>
@@ -167,10 +167,10 @@ export default function ActivityLogsPage() {
                         {log.user ? (
                           <div>
                             <p className="font-medium">{log.user.name}</p>
-                            <p className="text-xs text-slate-400">{log.user.email}</p>
+                            <p className="text-xs text-muted-foreground">{log.user.email}</p>
                           </div>
                         ) : (
-                          <span className="text-slate-400">System</span>
+                          <span className="text-muted-foreground">System</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -183,7 +183,7 @@ export default function ActivityLogsPage() {
                           {log.module}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600 max-w-xs truncate">
+                      <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                         {log.details ? (
                           <span title={log.details} className="cursor-help">
                             {log.details.length > 80 ? `${log.details.substring(0, 80)}...` : log.details}
@@ -205,7 +205,7 @@ export default function ActivityLogsPage() {
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm text-slate-600 px-3">
+          <span className="text-sm text-muted-foreground px-3">
             Page {page} of {totalPages}
           </span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>

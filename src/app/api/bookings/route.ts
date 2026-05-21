@@ -2,7 +2,18 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { successResponse, paginatedResponse, errorResponse, logActivity } from '@/lib/api-utils';
-import { RoleType } from '@prisma/client';
+import { generateConfirmationNumber } from '@/lib/confirmation-number';
+import { attachIdDocumentsToBooking } from '@/lib/booking-id-documents';
+import { isNonePaymentMethod, parseReservationPaymentMethod } from '@/lib/payment-method';
+import {
+  bookingVatOptions,
+  computeRoomBookingTotals,
+  getHotelVatPercent,
+  sumBookingNetPaid,
+} from '@/lib/booking-totals';
+import { formatGuestCompany } from '@/lib/reservation-terms';
+import { resolveBookingCheckInOut } from '@/lib/app-settings';
+import { Prisma, RoleType } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,13 +25,23 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
+    const search = searchParams.get('search')?.trim();
 
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    const where: Prisma.BookingWhereInput = {};
+    if (status) where.status = status as Prisma.EnumBookingStatusFilter['equals'];
     if (roomId) where.roomId = roomId;
     if (customerId) where.customerId = customerId;
+
+    if (search) {
+      where.OR = [
+        { customer: { name: { contains: search } } },
+        { customer: { phone: { contains: search } } },
+        { room: { roomNumber: { contains: search } } },
+        { confirmationNumber: { contains: search } },
+      ];
+    }
 
     // Date range filter: bookings that overlap with the given range
     if (dateFrom || dateTo) {
@@ -36,6 +57,7 @@ export async function GET(request: NextRequest) {
         include: {
           customer: true,
           room: { include: { type: true } },
+          payments: { select: { amount: true, paymentType: true } },
         },
         skip,
         take: limit,
@@ -44,7 +66,24 @@ export async function GET(request: NextRequest) {
       db.booking.count({ where }),
     ]);
 
-    return paginatedResponse(bookings, total, page, limit);
+    const enriched = bookings.map((booking) => {
+      const totalPaid = sumBookingNetPaid(booking.payments);
+      const totals = computeRoomBookingTotals(
+        booking.totalRoomCharge,
+        totalPaid,
+        bookingVatOptions(booking)
+      );
+      const { payments: _payments, ...rest } = booking;
+      return {
+        ...rest,
+        vatPercent: totals.vatPercent,
+        vatAmount: totals.vatAmount,
+        totalWithVat: totals.totalWithVat,
+        dueAmount: totals.dueAmount,
+      };
+    });
+
+    return paginatedResponse(enriched, total, page, limit);
   } catch (error) {
     console.error('Bookings list error:', error);
     return errorResponse('Failed to fetch bookings', 500);
@@ -74,6 +113,12 @@ export async function POST(request: NextRequest) {
       children,
       advancePayment,
       notes,
+      idDocumentPaths,
+      vatApplied,
+      vatPercent: vatPercentBody,
+      checkInNow,
+      paymentMethod,
+      company,
     } = body;
 
     if (!customerId || !roomId || !checkIn || !checkOut) {
@@ -95,18 +140,26 @@ export async function POST(request: NextRequest) {
       return errorResponse('Room not found');
     }
 
-    if (room.status === 'OCCUPIED' || room.status === 'MAINTENANCE') {
-      return errorResponse(`Room is currently ${room.status.toLowerCase()} and cannot be booked`);
+    if (room.status !== 'AVAILABLE') {
+      return errorResponse(
+        `Room is not available for booking (current status: ${room.status.toLowerCase().replace('_', ' ')})`
+      );
     }
 
-    // Calculate number of days
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
-    const diffMs = checkOutDate.getTime() - checkInDate.getTime();
-    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-    if (days <= 0) {
-      return errorResponse('Check-out date must be after check-in date');
+    let checkInDate: Date;
+    let checkOutDate: Date;
+    let days: number;
+    try {
+      const resolved = await resolveBookingCheckInOut(checkIn, checkOut, {
+        walkInNow: checkInNow === true,
+      });
+      checkInDate = resolved.checkIn;
+      checkOutDate = resolved.checkOut;
+      days = resolved.nights;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Check-out date must be after check-in date';
+      return errorResponse(message);
     }
 
     // Prevent overlapping active bookings for the same room.
@@ -127,15 +180,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate total room charge
+    // Calculate total room charge (ex-VAT) and due per reservation VAT options
     const totalRoomCharge = days * room.type.basePrice;
     const advance = advancePayment ? parseFloat(String(advancePayment)) : 0;
-    const dueAmount = totalRoomCharge - advance;
+    const defaultVat = await getHotelVatPercent();
+    const applyVat = vatApplied !== false;
+    let bookingVatPercent = defaultVat;
+    if (vatPercentBody !== undefined && vatPercentBody !== null && vatPercentBody !== '') {
+      const parsed = parseFloat(String(vatPercentBody));
+      if (!Number.isNaN(parsed) && parsed >= 0) bookingVatPercent = parsed;
+    }
+    const { dueAmount } = computeRoomBookingTotals(totalRoomCharge, advance, {
+      vatApplied: applyVat,
+      vatPercent: bookingVatPercent,
+    });
+
+    const confirmationNumber = await generateConfirmationNumber();
+    const resolvedCompany = formatGuestCompany(
+      company ?? customer.company
+    );
 
     const booking = await db.booking.create({
       data: {
+        confirmationNumber,
         customerId,
         roomId,
+        company: resolvedCompany,
         checkIn: checkInDate,
         checkOut: checkOutDate,
         adults: adults || 1,
@@ -143,6 +213,8 @@ export async function POST(request: NextRequest) {
         totalRoomCharge,
         advancePayment: advance,
         dueAmount,
+        vatApplied: applyVat,
+        vatPercent: bookingVatPercent,
         notes,
         createdBy: authUser.id,
       },
@@ -152,12 +224,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // If advance payment, create payment record
-    if (advance > 0) {
+    await attachIdDocumentsToBooking(
+      booking.id,
+      Array.isArray(idDocumentPaths) ? idDocumentPaths : undefined
+    );
+
+    const resolvedPaymentMethod = parseReservationPaymentMethod(paymentMethod);
+
+    // If advance payment with a real method, create payment record
+    if (advance > 0 && !isNonePaymentMethod(resolvedPaymentMethod)) {
       await db.payment.create({
         data: {
           amount: advance,
-          method: body.paymentMethod || 'CASH',
+          method: resolvedPaymentMethod,
           paymentType: 'ADVANCE',
           bookingId: booking.id,
           receivedBy: authResult.id,
@@ -166,8 +245,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update room status to occupied only for same-day check-in scenarios is not done here
-    // Room status remains as is until check-in
+    if (checkInNow === true) {
+      await db.room.update({
+        where: { id: roomId },
+        data: { status: 'OCCUPIED' },
+      });
+
+      const paymentRows = await db.payment.findMany({
+        where: { bookingId: booking.id },
+        select: { amount: true, paymentType: true },
+      });
+      const totalPaid = sumBookingNetPaid(paymentRows);
+      const { dueAmount: dueAfterCheckIn } = computeRoomBookingTotals(
+        totalRoomCharge,
+        totalPaid,
+        { vatApplied: applyVat, vatPercent: bookingVatPercent }
+      );
+
+      await db.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'CHECKED_IN',
+          actualCheckIn: new Date(),
+          dueAmount: dueAfterCheckIn,
+        },
+      });
+    }
 
     await logActivity(
       authResult.id,
@@ -180,12 +283,27 @@ export async function POST(request: NextRequest) {
         totalRoomCharge,
         advancePayment: advance,
         dueAmount,
+        checkedIn: checkInNow === true,
       })
     );
 
-    return successResponse(booking, 'Booking created successfully', 201);
+    const bookingWithDocs = await db.booking.findUnique({
+      where: { id: booking.id },
+      include: {
+        customer: true,
+        room: { include: { type: true } },
+        idDocuments: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+
+    return successResponse(bookingWithDocs ?? booking, 'Booking created successfully', 201);
   } catch (error) {
     console.error('Booking creation error:', error);
-    return errorResponse('Failed to create booking', 500);
+    const message =
+      error instanceof Error ? error.message : 'Failed to create booking';
+    return errorResponse(
+      process.env.NODE_ENV === 'development' ? message : 'Failed to create booking',
+      500
+    );
   }
 }

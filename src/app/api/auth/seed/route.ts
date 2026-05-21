@@ -244,12 +244,12 @@ export async function POST() {
     // Create Settings
     const settings = [
       { key: 'hotel_name', value: 'RRP Dream Inn', group: 'hotel' },
-      { key: 'restaurant_name', value: 'CloudView', group: 'restaurant' },
-      { key: 'vat_percent', value: '15', group: 'general' },
-      { key: 'currency', value: 'BDT', group: 'general' },
+      { key: 'vat_percent', value: '15', group: 'hotel' },
       { key: 'late_checkout_charge', value: '500', group: 'hotel' },
       { key: 'late_checkout_hours', value: '12', group: 'hotel' },
-      { key: 'service_charge_percent', value: '10', group: 'restaurant' },
+      { key: 'restaurant_name', value: 'CloudView', group: 'restaurant' },
+      { key: 'restaurant_vat_percent', value: '15', group: 'restaurant' },
+      { key: 'currency', value: 'BDT', group: 'general' },
     ];
     await db.setting.createMany({ data: settings });
 

@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { requireRole, canAccessHotel } from '@/lib/auth';
 import { successResponse, errorResponse, paginatedResponse, notFoundResponse, logActivity, generateInvoiceNumber } from '@/lib/api-utils';
 import { InvoiceStatus } from '@prisma/client';
+import { bookingVatOptions, sumBookingNetPaid } from '@/lib/booking-totals';
+import { buildInvoiceLineItems, replaceInvoiceLineItems } from '@/lib/invoice-line-items';
 
 // GET /api/invoices - List invoices with filters
 export async function GET(request: NextRequest) {
@@ -151,12 +153,9 @@ export async function POST(request: NextRequest) {
     // Hotel taxable base
     const hotelBase = roomCharges + extraCharges;
 
-    // Get VAT rate from settings (default 15%)
-    let vatPercent = 15;
-    const vatSetting = await db.setting.findUnique({ where: { key: 'vat_percent' } });
-    if (vatSetting) {
-      vatPercent = parseFloat(vatSetting.value) || 15;
-    }
+    const vatOpts = bookingVatOptions(booking);
+    const vatApplied = vatOpts.vatApplied !== false;
+    const vatPercent = vatApplied ? Math.max(0, vatOpts.vatPercent ?? 0) : 0;
 
     // Hotel discount from settings (applied only to hotel part)
     let discount = 0;
@@ -165,14 +164,15 @@ export async function POST(request: NextRequest) {
       discount = hotelBase * (parseFloat(discountSetting.value) || 0) / 100;
     }
 
-    const hotelVat = (hotelBase - discount) * vatPercent / 100;
+    const hotelVat =
+      vatPercent > 0 ? ((hotelBase - discount) * vatPercent) / 100 : 0;
     const vatAmount = hotelVat + restaurantVat;
     const foodCharges = restaurantNet;
     const subtotal = hotelBase + restaurantNet;
     const totalAmount = (hotelBase - discount + hotelVat) + restaurantTotal;
 
     // Calculate paid amount from all payments linked to this booking
-    const paidAmount = booking.payments.reduce((sum, p) => sum + p.amount, 0);
+    const paidAmount = sumBookingNetPaid(booking.payments);
     const dueAmount = totalAmount - paidAmount;
 
     // Determine status based on dueAmount
@@ -181,7 +181,22 @@ export async function POST(request: NextRequest) {
     // Generate invoice number
     const invoiceNumber = generateInvoiceNumber();
 
-    // Create invoice with items in a transaction
+    const lineItems = buildInvoiceLineItems({
+      roomNumber: booking.room.roomNumber,
+      roomTypeName: booking.room.type?.name || '',
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      charges: booking.charges,
+      restaurantOrders,
+      roomCharges,
+      includeExtraCharges: true,
+      discount,
+      hotelVat,
+      hotelVatPercent: vatPercent,
+      vatApplied,
+      restaurantVat,
+    });
+
     const invoice = await db.$transaction(async (tx) => {
       const inv = existingInvoice
         ? await tx.invoice.update({
@@ -220,77 +235,7 @@ export async function POST(request: NextRequest) {
             },
           });
 
-      // Rebuild line items so repeated generation always syncs with latest room-service orders/charges.
-      await tx.invoiceItem.deleteMany({
-        where: { invoiceId: inv.id },
-      });
-
-      // Create invoice items for room charges
-      const roomRateCharges = booking.charges.filter((c) => c.chargeType === 'ROOM_RATE');
-      if (roomRateCharges.length > 0) {
-        for (const charge of roomRateCharges) {
-          await tx.invoiceItem.create({
-            data: {
-              invoiceId: inv.id,
-              itemType: 'room_charge',
-              referenceId: charge.id,
-              description: charge.description || `Room Rate - ${booking.room.roomNumber}`,
-              quantity: charge.quantity,
-              unitPrice: charge.amount,
-              total: charge.amount * charge.quantity,
-            },
-          });
-        }
-      } else if (booking.totalRoomCharge > 0) {
-        // If no individual room charge entries, create one from booking totalRoomCharge
-        const nights = Math.max(1, Math.ceil(
-          (new Date(booking.checkOut).getTime() - new Date(booking.checkIn).getTime()) / (1000 * 60 * 60 * 24)
-        ));
-        const ratePerNight = booking.totalRoomCharge / nights;
-        await tx.invoiceItem.create({
-          data: {
-            invoiceId: inv.id,
-            itemType: 'room_charge',
-            description: `Room ${booking.room.roomNumber} (${booking.room.type?.name || ''}) - ${nights} night${nights > 1 ? 's' : ''}`,
-            quantity: nights,
-            unitPrice: ratePerNight,
-            total: booking.totalRoomCharge,
-          },
-        });
-      }
-
-      // Create invoice items for extra charges
-      for (const charge of booking.charges.filter((c) => c.chargeType !== 'ROOM_RATE')) {
-        await tx.invoiceItem.create({
-          data: {
-            invoiceId: inv.id,
-            itemType: 'extra_service',
-            referenceId: charge.id,
-            description: charge.description,
-            quantity: charge.quantity,
-            unitPrice: charge.amount,
-            total: charge.amount * charge.quantity,
-          },
-        });
-      }
-
-      // Create invoice items for restaurant orders
-      for (const order of restaurantOrders) {
-        for (const item of order.items) {
-          await tx.invoiceItem.create({
-            data: {
-              invoiceId: inv.id,
-              itemType: 'food_order',
-              referenceId: item.id,
-              description: item.menuItem.name,
-              quantity: item.quantity,
-              unitPrice: item.price,
-              total: item.price * item.quantity,
-            },
-          });
-        }
-      }
-
+      await replaceInvoiceLineItems(tx, inv.id, lineItems);
       return inv;
     });
 

@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import InvoiceDetail from './InvoiceDetail'
+import { useHotelTimes } from '@/hooks/use-hotel-times'
 
 interface InvoiceItem {
   id: string
@@ -73,7 +74,7 @@ interface Booking {
 }
 
 const statusColors: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
+  DRAFT: 'bg-muted text-foreground border-border',
   ISSUED: 'bg-sky-50 text-sky-700 border-sky-200',
   PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   PARTIALLY_PAID: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -84,6 +85,7 @@ export default function InvoicesPage() {
   const { user } = useAuthStore()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { formatCheckIn, formatCheckOut } = useHotelTimes()
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -176,8 +178,7 @@ export default function InvoicesPage() {
   const selectedBooking = allBookings.find((b) => b.id === selectedBookingId)
 
   const handlePrint = (invoice: Invoice) => {
-    setSelectedInvoice(invoice)
-    setTimeout(() => window.print(), 300)
+    window.open(`/invoice/${invoice.id}`, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -185,11 +186,11 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <FileText className="h-6 w-6 text-amber-600" />
             Invoices
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Manage hotel billing and invoices</p>
+          <p className="text-muted-foreground text-sm mt-1">Manage hotel billing and invoices</p>
         </div>
         <Button
           onClick={() => setShowGenerateDialog(true)}
@@ -205,7 +206,7 @@ export default function InvoicesPage() {
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by invoice #, guest name, room..."
                 value={searchQuery}
@@ -215,7 +216,7 @@ export default function InvoicesPage() {
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2 text-slate-400" />
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Filter status" />
               </SelectTrigger>
               <SelectContent>
@@ -268,13 +269,13 @@ export default function InvoicesPage() {
                   ))
                 ) : filteredInvoices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       No invoices found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredInvoices.map((invoice) => (
-                    <TableRow key={invoice.id} className="hover:bg-slate-50">
+                    <TableRow key={invoice.id} className="hover:bg-muted">
                       <TableCell className="font-mono text-sm font-medium">
                         {invoice.invoiceNumber}
                       </TableCell>
@@ -342,7 +343,7 @@ export default function InvoicesPage() {
           >
             Previous
           </Button>
-          <span className="flex items-center px-3 text-sm text-slate-600">
+          <span className="flex items-center px-3 text-sm text-muted-foreground">
             Page {page} of {totalPages}
           </span>
           <Button
@@ -360,13 +361,15 @@ export default function InvoicesPage() {
       <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Generate Invoice</DialogTitle>
+            <DialogTitle>
+              {showPreview ? 'Invoice Preview' : 'Generate Invoice'}
+            </DialogTitle>
           </DialogHeader>
 
           {!showPreview ? (
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-slate-700 mb-2 block">
+                <label className="text-sm font-medium text-foreground mb-2 block">
                   Select Booking
                 </label>
                 <Select value={selectedBookingId} onValueChange={setSelectedBookingId}>
@@ -385,29 +388,29 @@ export default function InvoicesPage() {
               </div>
 
               {selectedBooking && (
-                <Card className="bg-slate-50">
+                <Card className="bg-muted">
                   <CardContent className="p-4 space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Guest:</span>
+                      <span className="text-muted-foreground">Guest:</span>
                       <span className="font-medium">{selectedBooking.customer?.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Room:</span>
+                      <span className="text-muted-foreground">Room:</span>
                       <span className="font-medium">{selectedBooking.room?.roomNumber} - {selectedBooking.room?.type?.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Check-in:</span>
-                      <span className="font-medium">{format(new Date(selectedBooking.checkIn), 'MMM dd, yyyy')}</span>
+                      <span className="text-muted-foreground">Check-in:</span>
+                      <span className="font-medium">{formatCheckIn(selectedBooking.checkIn)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Check-out:</span>
-                      <span className="font-medium">{format(new Date(selectedBooking.checkOut), 'MMM dd, yyyy')}</span>
+                      <span className="text-muted-foreground">Check-out:</span>
+                      <span className="font-medium">{formatCheckOut(selectedBooking.checkOut)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Room Charges:</span>
+                      <span className="text-muted-foreground">Room Charges:</span>
                       <span className="font-semibold">৳{selectedBooking.totalRoomCharge.toLocaleString()}</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">
+                    <p className="text-xs text-muted-foreground mt-2">
                       * Food charges and extra services will be auto-calculated from linked orders and room charges.
                     </p>
                   </CardContent>
@@ -416,7 +419,7 @@ export default function InvoicesPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-slate-600">Review the invoice before generating:</p>
+              <p className="text-sm text-muted-foreground">Review the invoice before generating:</p>
               {selectedBooking && (
                 <Card className="border-amber-200 bg-amber-50/50">
                   <CardContent className="p-4">
@@ -436,7 +439,7 @@ export default function InvoicesPage() {
                       </div>
                       <div className="flex justify-between">
                         <span>Food & Extra Charges:</span>
-                        <span className="text-slate-500">Auto-calculated</span>
+                        <span className="text-muted-foreground">Auto-calculated</span>
                       </div>
                       <hr className="my-2 border-amber-200" />
                       <p className="text-xs text-amber-600">
@@ -484,6 +487,13 @@ export default function InvoicesPage() {
       {/* Invoice Detail Dialog */}
       <Dialog open={!!selectedInvoice && !showGenerateDialog} onOpenChange={(open) => { if (!open) setSelectedInvoice(null) }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="sr-only">
+              {selectedInvoice
+                ? `Invoice ${selectedInvoice.invoiceNumber}`
+                : 'Invoice details'}
+            </DialogTitle>
+          </DialogHeader>
           {selectedInvoice && (
             <InvoiceDetail
               invoiceId={selectedInvoice.id}

@@ -92,7 +92,7 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: typeof Cl
   PENDING: { color: 'text-yellow-700', bg: 'bg-yellow-100 border-yellow-200', icon: Clock, label: 'Pending' },
   COOKING: { color: 'text-orange-700', bg: 'bg-orange-100 border-orange-200', icon: Flame, label: 'Cooking' },
   READY: { color: 'text-green-700', bg: 'bg-green-100 border-green-200', icon: CheckCircle2, label: 'Ready' },
-  DELIVERED: { color: 'text-slate-500', bg: 'bg-slate-100 border-slate-200', icon: CheckCircle2, label: 'Delivered' },
+  DELIVERED: { color: 'text-muted-foreground', bg: 'bg-muted border-border', icon: CheckCircle2, label: 'Delivered' },
   CANCELLED: { color: 'text-red-600', bg: 'bg-red-100 border-red-200', icon: AlertCircle, label: 'Cancelled' },
 }
 
@@ -198,7 +198,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
+    <div className="h-full flex flex-col bg-muted">
       {/* Header */}
       <div className="bg-slate-900 text-white px-6 py-4 shrink-0">
         <div className="flex items-center justify-between">
@@ -208,17 +208,17 @@ export default function OrdersPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Orders Management</h1>
-              <p className="text-xs text-slate-400">CloudView Restaurant</p>
+              <p className="text-xs text-slate-300">CloudView Restaurant</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="px-6 py-3 bg-white border-b shrink-0">
+      <div className="px-6 py-3 bg-card border-b shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search orders..."
               value={searchQuery}
@@ -241,9 +241,9 @@ export default function OrdersPage() {
       </div>
 
       {/* Status Tabs */}
-      <div className="px-6 pt-3 bg-white border-b shrink-0">
+      <div className="px-6 pt-3 bg-card border-b shrink-0">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-slate-100">
+          <TabsList className="bg-muted">
             {Object.entries(statusCounts).map(([key, count]) => (
               <TabsTrigger key={key} value={key} className="text-xs gap-1.5">
                 {key === 'ALL' ? 'All' : key.charAt(0) + key.slice(1).toLowerCase()}
@@ -265,7 +265,7 @@ export default function OrdersPage() {
             ))}
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <ChefHat className="w-12 h-12 mb-3 opacity-30" />
             <p className="text-sm">No orders found</p>
           </div>
@@ -295,7 +295,7 @@ export default function OrdersPage() {
                   return (
                     <Fragment key={order.id}>
                       <TableRow
-                        className="cursor-pointer hover:bg-slate-50"
+                        className="cursor-pointer hover:bg-muted"
                         onClick={() => setExpandedRow(isExpanded ? null : order.id)}
                       >
                         <TableCell className="font-mono font-semibold text-sm">
@@ -334,7 +334,7 @@ export default function OrdersPage() {
                             {statusCfg.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-slate-500">
+                        <TableCell className="text-xs text-muted-foreground">
                           {formatTime(order.createdAt)}
                           <br />
                           <span className="text-[10px]">{timeElapsed(order.createdAt)}</span>
@@ -366,9 +366,9 @@ export default function OrdersPage() {
                       </TableRow>
                       {isExpanded && (
                         <TableRow key={`${order.id}-detail`}>
-                          <TableCell colSpan={8} className="bg-slate-50 px-8 py-4">
+                          <TableCell colSpan={8} className="bg-muted px-8 py-4">
                             <div className="space-y-2">
-                              <h4 className="font-semibold text-sm text-slate-700">Order Items</h4>
+                              <h4 className="font-semibold text-sm text-foreground">Order Items</h4>
                               {order.items.map((item) => (
                                 <div
                                   key={item.id}
@@ -381,7 +381,7 @@ export default function OrdersPage() {
                                       }`}
                                     />
                                     <span>{item.menuItem.name}</span>
-                                    <span className="text-slate-400">× {item.quantity}</span>
+                                    <span className="text-muted-foreground">× {item.quantity}</span>
                                   </div>
                                   <span className="font-medium">
                                     ৳{(item.price * item.quantity).toFixed(0)}
@@ -389,16 +389,16 @@ export default function OrdersPage() {
                                 </div>
                               ))}
                               <Separator />
-                              <div className="flex justify-between text-xs text-slate-500">
+                              <div className="flex justify-between text-xs text-muted-foreground">
                                 <span>Subtotal: ৳{order.subtotal.toFixed(0)}</span>
                                 <span>Discount: ৳{order.discount.toFixed(0)}</span>
                                 <span>VAT: ৳{order.vatAmount.toFixed(0)}</span>
-                                <span className="font-bold text-slate-800">
+                                <span className="font-bold text-foreground">
                                   Total: ৳{order.totalAmount.toFixed(0)}
                                 </span>
                               </div>
                               {order.notes && (
-                                <div className="text-xs text-slate-500 bg-amber-50 p-2 rounded">
+                                <div className="text-xs text-muted-foreground bg-amber-50 p-2 rounded">
                                   📝 {order.notes}
                                 </div>
                               )}
@@ -435,34 +435,34 @@ export default function OrdersPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <span className="text-slate-500">Type:</span>{' '}
+                  <span className="text-muted-foreground">Type:</span>{' '}
                   {ORDER_TYPE_CONFIG[selectedOrder.orderType].label}
                 </div>
                 <div>
-                  <span className="text-slate-500">Created:</span>{' '}
+                  <span className="text-muted-foreground">Created:</span>{' '}
                   {formatTime(selectedOrder.createdAt)}
                 </div>
                 {selectedOrder.orderType === 'DINE_IN' && selectedOrder.table && (
                   <div>
-                    <span className="text-slate-500">Table:</span>{' '}
+                    <span className="text-muted-foreground">Table:</span>{' '}
                     {selectedOrder.table.tableNumber}
                   </div>
                 )}
                 {selectedOrder.orderType === 'ROOM_SERVICE' && selectedOrder.room && (
                   <div>
-                    <span className="text-slate-500">Room:</span>{' '}
+                    <span className="text-muted-foreground">Room:</span>{' '}
                     {selectedOrder.room.roomNumber}
                   </div>
                 )}
                 {selectedOrder.orderType === 'TAKEAWAY' && selectedOrder.customerName && (
                   <div>
-                    <span className="text-slate-500">Customer:</span>{' '}
+                    <span className="text-muted-foreground">Customer:</span>{' '}
                     {selectedOrder.customerName}
                   </div>
                 )}
                 {selectedOrder.creator && (
                   <div>
-                    <span className="text-slate-500">Created by:</span>{' '}
+                    <span className="text-muted-foreground">Created by:</span>{' '}
                     {selectedOrder.creator.name}
                   </div>
                 )}
@@ -485,7 +485,7 @@ export default function OrdersPage() {
                           }`}
                         />
                         <span>{item.menuItem.name}</span>
-                        <span className="text-slate-400">× {item.quantity}</span>
+                        <span className="text-muted-foreground">× {item.quantity}</span>
                       </div>
                       <span className="font-medium">
                         ৳{(item.price * item.quantity).toFixed(0)}
@@ -499,15 +499,15 @@ export default function OrdersPage() {
 
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Subtotal</span>
+                  <span className="text-muted-foreground">Subtotal</span>
                   <span>৳{selectedOrder.subtotal.toFixed(0)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Discount</span>
+                  <span className="text-muted-foreground">Discount</span>
                   <span>৳{selectedOrder.discount.toFixed(0)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">VAT ({selectedOrder.vatPercent}%)</span>
+                  <span className="text-muted-foreground">VAT ({selectedOrder.vatPercent}%)</span>
                   <span>৳{selectedOrder.vatAmount.toFixed(0)}</span>
                 </div>
                 <Separator />

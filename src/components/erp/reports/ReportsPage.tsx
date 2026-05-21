@@ -205,11 +205,11 @@ export default function ReportsPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BarChart3 className="h-6 w-6 text-amber-600" />
             Reports & Analytics
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Comprehensive business insights</p>
+          <p className="text-muted-foreground text-sm mt-1">Comprehensive business insights</p>
         </div>
         <div className="flex gap-2 items-end">
           <div>
@@ -247,7 +247,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Total Sales</p>
+                  <p className="text-sm text-muted-foreground">Total Sales</p>
                   <p className="text-2xl font-bold text-amber-700">
                     ৳{((restaurantDaily?.totalSales || 0) as number).toLocaleString()}
                   </p>
@@ -255,7 +255,7 @@ export default function ReportsPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Total Orders</p>
+                  <p className="text-sm text-muted-foreground">Total Orders</p>
                   <p className="text-2xl font-bold text-emerald-700">
                     {((restaurantDaily?.totalOrders || 0) as number)}
                   </p>
@@ -263,7 +263,7 @@ export default function ReportsPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Avg Order Value</p>
+                  <p className="text-sm text-muted-foreground">Avg Order Value</p>
                   <p className="text-2xl font-bold text-sky-700">
                     ৳{((restaurantDaily?.averageOrderValue || 0) as number).toLocaleString()}
                   </p>
@@ -328,7 +328,7 @@ export default function ReportsPage() {
                       </PieChart>
                     </ChartContainer>
                   ) : (
-                    <p className="text-center text-slate-500 py-8">No order data available</p>
+                    <p className="text-center text-muted-foreground py-8">No order data available</p>
                   )}
                 </CardContent>
               </Card>
@@ -361,7 +361,7 @@ export default function ReportsPage() {
                             <TableCell className="text-right text-emerald-600">৳{item.revenue.toLocaleString()}</TableCell>
                           </TableRow>
                         )) : (
-                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-slate-500">No data</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">No data</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>
@@ -379,7 +379,7 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Total Revenue</p>
+                  <p className="text-sm text-muted-foreground">Total Revenue</p>
                   <p className="text-2xl font-bold text-amber-700">
                     ৳{((hotelRevenue?.totalRevenue || 0) as number).toLocaleString()}
                   </p>
@@ -387,7 +387,7 @@ export default function ReportsPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Occupancy Rate</p>
+                  <p className="text-sm text-muted-foreground">Occupancy Rate</p>
                   <p className="text-2xl font-bold text-emerald-700">
                     {(hotelOccupancy?.occupancyRate || 0 as number).toFixed(1)}%
                   </p>
@@ -395,13 +395,13 @@ export default function ReportsPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Total Bookings</p>
+                  <p className="text-sm text-muted-foreground">Total Bookings</p>
                   <p className="text-2xl font-bold text-sky-700">{((hotelRevenue?.totalBookings || 0) as number)}</p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Avg Daily Rate</p>
+                  <p className="text-sm text-muted-foreground">Avg Daily Rate</p>
                   <p className="text-2xl font-bold text-purple-700">
                     ৳{((hotelRevenue?.averageRate || 0) as number).toLocaleString()}
                   </p>
@@ -447,13 +447,13 @@ export default function ReportsPage() {
                     <Skeleton className="h-48 w-full" />
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex justify-between"><span className="text-slate-600">Total Rooms</span><span className="font-semibold">{(hotelOccupancy?.totalRooms || 0) as number}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Total Rooms</span><span className="font-semibold">{(hotelOccupancy?.totalRooms || 0) as number}</span></div>
                       <div className="flex justify-between"><span className="text-emerald-600">Available</span><span className="font-semibold">{(hotelOccupancy?.availableRooms || 0) as number}</span></div>
                       <div className="flex justify-between"><span className="text-amber-600">Occupied</span><span className="font-semibold">{(hotelOccupancy?.occupiedRooms || 0) as number}</span></div>
                       <div className="flex justify-between"><span className="text-sky-600">Cleaning</span><span className="font-semibold">{(hotelOccupancy?.cleaningRooms || 0) as number}</span></div>
                       <div className="flex justify-between"><span className="text-red-600">Maintenance</span><span className="font-semibold">{(hotelOccupancy?.maintenanceRooms || 0) as number}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Today Check-ins</span><span className="font-semibold">{(hotelOccupancy?.todayCheckins || 0) as number}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Today Check-outs</span><span className="font-semibold">{(hotelOccupancy?.todayCheckouts || 0) as number}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Today Check-ins</span><span className="font-semibold">{(hotelOccupancy?.todayCheckins || 0) as number}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Today Check-outs</span><span className="font-semibold">{(hotelOccupancy?.todayCheckouts || 0) as number}</span></div>
                     </div>
                   )}
                 </CardContent>
@@ -486,7 +486,7 @@ export default function ReportsPage() {
                             <TableCell className="text-right text-emerald-600">৳{r.totalCharges.toLocaleString()}</TableCell>
                           </TableRow>
                         )) : (
-                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-slate-500">No data</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">No data</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>
@@ -504,15 +504,15 @@ export default function ReportsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Total Revenue</p>
-                  <p className="text-2xl font-bold text-slate-800">
+                  <p className="text-sm text-muted-foreground">Total Revenue</p>
+                  <p className="text-2xl font-bold text-foreground">
                     ৳{((combinedRevenue?.totalRevenue || 0) as number).toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Hotel Revenue</p>
+                  <p className="text-sm text-muted-foreground">Hotel Revenue</p>
                   <p className="text-2xl font-bold text-amber-700">
                     ৳{((combinedRevenue?.hotelRevenue || 0) as number).toLocaleString()}
                   </p>
@@ -520,7 +520,7 @@ export default function ReportsPage() {
               </Card>
               <Card>
                 <CardContent className="p-4">
-                  <p className="text-sm text-slate-500">Restaurant Revenue</p>
+                  <p className="text-sm text-muted-foreground">Restaurant Revenue</p>
                   <p className="text-2xl font-bold text-emerald-700">
                     ৳{((combinedRevenue?.restaurantRevenue || 0) as number).toLocaleString()}
                   </p>
@@ -570,11 +570,11 @@ export default function ReportsPage() {
                     <Skeleton className="h-48 w-full" />
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex justify-between"><span className="text-slate-600">Total Revenue</span><span className="font-semibold">৳{((adminSummary?.totalRevenue || 0) as number).toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Total Payments Received</span><span className="font-semibold text-emerald-600">৳{((adminSummary?.profitSummary as Record<string, number>)?.totalPaymentsReceived || 0).toLocaleString()}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-600">Outstanding Dues</span><span className="font-semibold text-red-600">৳{((adminSummary?.profitSummary as Record<string, number>)?.outstandingDues || 0).toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Total Revenue</span><span className="font-semibold">৳{((adminSummary?.totalRevenue || 0) as number).toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Total Payments Received</span><span className="font-semibold text-emerald-600">৳{((adminSummary?.profitSummary as Record<string, number>)?.totalPaymentsReceived || 0).toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Outstanding Dues</span><span className="font-semibold text-red-600">৳{((adminSummary?.profitSummary as Record<string, number>)?.outstandingDues || 0).toLocaleString()}</span></div>
                       <hr />
-                      <div className="flex justify-between"><span className="text-slate-800 font-medium">Net Position</span><span className={`font-bold ${((adminSummary?.profitSummary as Record<string, number>)?.netPosition || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>৳{((adminSummary?.profitSummary as Record<string, number>)?.netPosition || 0).toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-foreground font-medium">Net Position</span><span className={`font-bold ${((adminSummary?.profitSummary as Record<string, number>)?.netPosition || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>৳{((adminSummary?.profitSummary as Record<string, number>)?.netPosition || 0).toLocaleString()}</span></div>
                     </div>
                   )}
                 </CardContent>
@@ -607,7 +607,7 @@ export default function ReportsPage() {
                             <TableCell className="text-right text-emerald-600">৳{c.totalSpent.toLocaleString()}</TableCell>
                           </TableRow>
                         )) : (
-                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-slate-500">No data</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">No data</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>

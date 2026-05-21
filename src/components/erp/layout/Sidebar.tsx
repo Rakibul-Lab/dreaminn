@@ -133,13 +133,13 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-amber-400 truncate">RRP Dream Inn</p>
-            <p className="text-xs text-slate-400 truncate">+ CloudView</p>
+            <p className="text-xs text-muted-foreground truncate">+ CloudView</p>
           </div>
         )}
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-slate-400 hover:text-white hover:bg-slate-700 shrink-0"
+          className="h-7 w-7 text-muted-foreground hover:text-white hover:bg-slate-700 shrink-0"
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -152,7 +152,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {hotelItems.length > 0 && (
           <div className="mb-2">
             {!collapsed && (
-              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 RRP Dream Inn
               </p>
             )}
@@ -172,7 +172,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {restaurantItems.length > 0 && (
           <div className="mb-2">
             {!collapsed && (
-              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500 mt-2">
+              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mt-2">
                 CloudView Restaurant
               </p>
             )}
@@ -192,7 +192,7 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
         {adminItems.length > 0 && (
           <div className="mb-2">
             {!collapsed && (
-              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500 mt-2">
+              <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mt-2">
                 Administration
               </p>
             )}
@@ -220,13 +220,13 @@ export function Sidebar({ activeView, onViewChange }: SidebarProps) {
           {!collapsed && user && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user.name}</p>
-              <p className="text-xs text-slate-400 truncate">{user.role.replace('_', ' ')}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.role.replace('_', ' ')}</p>
             </div>
           )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-slate-700 shrink-0"
+            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-slate-700 shrink-0"
             onClick={logout}
             title="Logout"
           >

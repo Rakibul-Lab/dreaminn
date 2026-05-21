@@ -73,7 +73,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex">
         <Sidebar activeView={activeView} onViewChange={handleViewChange} />

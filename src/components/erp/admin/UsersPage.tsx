@@ -50,7 +50,7 @@ const roleColors: Record<string, string> = {
 }
 
 export default function UsersPage() {
-  const { user, token, login } = useAuthStore()
+  const { user, updateUser } = useAuthStore()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [showDialog, setShowDialog] = useState(false)
@@ -97,18 +97,14 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       toast({ title: 'User Updated', description: res.message || 'User updated successfully' })
 
-      // If current logged-in user was edited (e.g., avatar changed), refresh auth store immediately.
-      if (user && token && res?.data?.id === user.id) {
-        login(
-          {
-            id: res.data.id,
-            email: res.data.email,
-            name: res.data.name,
-            role: res.data.role,
-            avatar: res.data.avatar ?? null,
-          },
-          token
-        )
+      if (user && res?.data?.id === user.id) {
+        updateUser({
+          name: res.data.name,
+          email: res.data.email,
+          role: res.data.role,
+          avatar: res.data.avatar ?? null,
+          phone: res.data.phone ?? null,
+        })
       }
 
       closeDialog()
@@ -213,11 +209,11 @@ export default function UsersPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Users className="h-6 w-6 text-amber-600" />
             User Management
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Manage system users and roles</p>
+          <p className="text-muted-foreground text-sm mt-1">Manage system users and roles</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -259,14 +255,14 @@ export default function UsersPage() {
                   ))
                 ) : users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">No users found</TableCell>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No users found</TableCell>
                   </TableRow>
                 ) : (
                   users.map((u) => (
-                    <TableRow key={u.id} className="hover:bg-slate-50">
+                    <TableRow key={u.id} className="hover:bg-muted">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full border bg-slate-100 overflow-hidden flex items-center justify-center text-xs font-semibold text-slate-600">
+                          <div className="h-8 w-8 rounded-full border bg-muted overflow-hidden flex items-center justify-center text-xs font-semibold text-muted-foreground">
                             {u.avatar ? (
                               <Image src={u.avatar} alt={u.name} width={32} height={32} className="h-full w-full object-cover" unoptimized />
                             ) : (
@@ -276,7 +272,7 @@ export default function UsersPage() {
                           <span>{u.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600">{u.email}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`${roleColors[u.role] || ''} flex items-center gap-1 w-fit`}>
                           {roleIcons[u.role]}
@@ -292,7 +288,7 @@ export default function UsersPage() {
                           {u.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-500">
+                      <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(u.createdAt), 'MMM dd, yyyy')}
                       </TableCell>
                       <TableCell className="text-right">
@@ -329,7 +325,7 @@ export default function UsersPage() {
             <div>
               <Label>Profile Image</Label>
               <div className="mt-2 flex items-center gap-3">
-                <div className="h-14 w-14 rounded-full border bg-slate-100 overflow-hidden flex items-center justify-center text-sm font-semibold text-slate-600">
+                <div className="h-14 w-14 rounded-full border bg-muted overflow-hidden flex items-center justify-center text-sm font-semibold text-muted-foreground">
                   {form.avatar ? (
                     <Image src={form.avatar} alt="Avatar preview" width={56} height={56} className="h-full w-full object-cover" unoptimized />
                   ) : (

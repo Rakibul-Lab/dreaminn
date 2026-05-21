@@ -11,7 +11,7 @@ export function PlaceholderPage() {
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
             <Construction className="w-8 h-8 text-amber-600" />
           </div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-2">Coming Soon</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-2">Coming Soon</h2>
           <p className="text-sm text-muted-foreground">
             This module is under development. Check back soon for updates!
           </p>

@@ -1,7 +1,10 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import { successResponse, errorResponse, paginatedResponse, notFoundResponse } from '@/lib/api-utils';
+import { successResponse, errorResponse, notFoundResponse } from '@/lib/api-utils';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 // GET /api/notifications - List notifications with filters
 export async function GET(request: NextRequest) {
@@ -12,37 +15,31 @@ export async function GET(request: NextRequest) {
     const user = authResult;
     const { searchParams } = new URL(request.url);
 
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
     const userId = searchParams.get('userId');
     const type = searchParams.get('type');
-    const read = searchParams.get('read');
+    const readParam = searchParams.get('read');
 
     const skip = (page - 1) * limit;
 
-    // Build where clause
     const where: Record<string, unknown> = {};
 
-    // Filter by userId (if provided, or default to current user)
     if (userId) {
       where.userId = userId;
     } else {
-      // Show notifications for this user or global notifications (userId = null)
-      where.OR = [
-        { userId: user.id },
-        { userId: null },
-      ];
+      where.OR = [{ userId: user.id }, { userId: null }];
     }
 
     if (type) {
       where.type = type;
     }
 
-    if (read !== null && read !== undefined) {
-      where.read = read === 'true';
+    if (readParam !== null && readParam !== '') {
+      where.read = readParam === 'true';
     }
 
-    const [notifications, total] = await Promise.all([
+    const [notifications, total, unreadCount] = await Promise.all([
       db.notification.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -50,20 +47,25 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       db.notification.count({ where }),
+      db.notification.count({
+        where: {
+          OR: [{ userId: user.id }, { userId: null }],
+          read: false,
+        },
+      }),
     ]);
 
-    // Get unread count for current user
-    const unreadCount = await db.notification.count({
-      where: {
-        OR: [
-          { userId: user.id },
-          { userId: null },
-        ],
-        read: false,
+    return NextResponse.json({
+      success: true,
+      data: notifications,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+        unreadCount,
       },
     });
-
-    return paginatedResponse(notifications, total, page, limit);
   } catch (error) {
     console.error('Error fetching notifications:', error);
     return errorResponse('Failed to fetch notifications', 500);
@@ -81,13 +83,9 @@ export async function PUT(request: NextRequest) {
     const { id, markAll } = body;
 
     if (markAll) {
-      // Mark all notifications as read for this user
       await db.notification.updateMany({
         where: {
-          OR: [
-            { userId: user.id },
-            { userId: null },
-          ],
+          OR: [{ userId: user.id }, { userId: null }],
           read: false,
         },
         data: { read: true },
@@ -108,7 +106,6 @@ export async function PUT(request: NextRequest) {
       return notFoundResponse('Notification');
     }
 
-    // Verify the notification belongs to this user or is global
     if (notification.userId && notification.userId !== user.id) {
       return errorResponse('You can only mark your own notifications as read', 403);
     }

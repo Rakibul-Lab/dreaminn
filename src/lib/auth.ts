@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from './db';
 import { RoleType } from '@prisma/client';
+import { isIdleSessionExpired } from '@/lib/session';
 
 // Simple session-based auth using headers
 // In production, use proper JWT/NextAuth with secure tokens
@@ -30,7 +30,24 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
   };
 }
 
+export function validateSession(request: NextRequest): NextResponse | null {
+  const lastActivityHeader = request.headers.get('x-last-activity');
+  const lastActivity = lastActivityHeader ? Number(lastActivityHeader) : null;
+
+  if (lastActivity && Number.isFinite(lastActivity) && isIdleSessionExpired(lastActivity)) {
+    return NextResponse.json(
+      { error: 'Session expired due to inactivity', code: 'SESSION_EXPIRED' },
+      { status: 401 }
+    );
+  }
+
+  return null;
+}
+
 export function requireAuth(request: NextRequest): AuthUser | NextResponse {
+  const sessionError = validateSession(request);
+  if (sessionError) return sessionError;
+
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

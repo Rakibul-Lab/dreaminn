@@ -1,15 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Building2, Cloud, Eye, EyeOff, Loader2, Database, KeyRound } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Building2, Cloud, Eye, EyeOff, Loader2, Database, KeyRound, Hotel, UtensilsCrossed } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/lib/auth-store';
 import { toast } from 'sonner';
+import { AppDevelopedByFooter } from '@/components/AppDevelopedByFooter';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -64,7 +67,8 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50">
+      <div className="relative flex-1 flex items-center justify-center p-4">
       {/* Background decorations */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-amber-200/30 rounded-full blur-3xl" />
@@ -73,34 +77,41 @@ export function LoginPage() {
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo & Branding */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25">
-              <Building2 className="w-7 h-7" />
+        <Card className="shadow-xl border-0 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-6 pt-6">
+            <div className="text-center mb-6 pb-6 border-b border-border">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4 border border-border overflow-hidden">
+                <Image
+                  src="/brand-logo.png"
+                  alt="RRP Dream Inn logo"
+                  width={64}
+                  height={64}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <h1 className="text-2xl font-bold text-foreground">ERP System</h1>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+                  <Hotel className="h-3 w-3 mr-1" />
+                  RRP Dream Inn
+                </Badge>
+                <span className="text-muted-foreground">+</span>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                  <UtensilsCrossed className="h-3 w-3 mr-1" />
+                  CloudView
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">Hotel & Restaurant ERP System</p>
             </div>
-            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25">
-              <Cloud className="w-7 h-7" />
-            </div>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            <span className="text-amber-700">RRP Dream Inn</span>
-            <span className="text-muted-foreground mx-2">+</span>
-            <span className="text-emerald-700">CloudView</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Hotel & Restaurant ERP System</p>
-        </div>
 
-        {/* Login Card */}
-        <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <KeyRound className="w-5 h-5 text-amber-600" />
-              Sign In
-            </CardTitle>
-            <CardDescription>Enter your credentials to access the system</CardDescription>
-          </CardHeader>
-          <CardContent>
+            <CardHeader className="p-0 pb-4">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-amber-600" />
+                Sign In
+              </CardTitle>
+              <CardDescription>Enter your credentials to access the system</CardDescription>
+            </CardHeader>
+
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -217,10 +228,9 @@ export function LoginPage() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          RRP Dream Inn + CloudView ERP v1.0
-        </p>
       </div>
+      </div>
+      <AppDevelopedByFooter showProductLine />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
@@ -63,6 +63,65 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+
+function buildFoodPlaceholderSrc(itemId: string, itemName: string, width: number, height: number) {
+  const params = new URLSearchParams({
+    seed: itemId,
+    name: itemName,
+    w: String(width),
+    h: String(height),
+  })
+  return `/api/placeholder/food?${params.toString()}`
+}
+
+function normalizeMenuImageSrc(image: string | null | undefined) {
+  const raw = image?.trim()
+  if (!raw) return null
+  if (
+    raw.startsWith('data:image/') ||
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('/')
+  ) {
+    return raw
+  }
+  // Support values like "uploads/item.jpg" or "./uploads/item.jpg".
+  return `/${raw.replace(/^\.?\//, '')}`
+}
+
+function MenuItemImage({
+  item,
+  width,
+  height,
+  className,
+}: {
+  item: Pick<MenuItem, 'id' | 'name' | 'image'>
+  width: number
+  height: number
+  className: string
+}) {
+  const fallbackSrc = buildFoodPlaceholderSrc(item.id, item.name, width, height)
+  const preferredSrc = normalizeMenuImageSrc(item.image) || fallbackSrc
+  const [src, setSrc] = useState(preferredSrc)
+
+  useEffect(() => {
+    setSrc(preferredSrc)
+  }, [preferredSrc])
+
+  return (
+    <Image
+      src={src}
+      alt={item.name}
+      width={width}
+      height={height}
+      className={className}
+      unoptimized
+      onError={() => {
+        if (src !== fallbackSrc) setSrc(fallbackSrc)
+      }}
+    />
+  )
+}
 
 // Types
 interface MenuCategory {
@@ -130,17 +189,6 @@ export default function MenuPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('name')
-
-  const getItemImageSrc = (item: Pick<MenuItem, 'id' | 'name' | 'image'>) => {
-    if (item.image && item.image.trim()) return item.image
-    const params = new URLSearchParams({
-      seed: item.id,
-      name: item.name,
-      w: '220',
-      h: '140',
-    })
-    return `/api/placeholder/food?${params.toString()}`
-  }
 
   const handleChooseImage = async (file: File | null) => {
     if (!file) return
@@ -369,7 +417,7 @@ export default function MenuPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
+    <div className="h-full flex flex-col bg-muted">
       {/* Header */}
       <div className="bg-slate-900 text-white px-6 py-4 shrink-0">
         <div className="flex items-center justify-between">
@@ -379,7 +427,7 @@ export default function MenuPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Menu Management</h1>
-              <p className="text-xs text-slate-400">CloudView Restaurant</p>
+              <p className="text-xs text-slate-300">CloudView Restaurant</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -392,7 +440,7 @@ export default function MenuPage() {
                     setCategoryDialogOpen(true)
                   }}
                   variant="outline"
-                  className="border-white bg-white text-black hover:bg-slate-100 hover:text-black"
+                  className="border-slate-600 bg-card text-foreground hover:bg-muted"
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Category
@@ -439,7 +487,7 @@ export default function MenuPage() {
                     ))}
                   </div>
                 ) : categories.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-4">
+                  <p className="text-xs text-muted-foreground text-center py-4">
                     No categories yet
                   </p>
                 ) : (
@@ -450,7 +498,7 @@ export default function MenuPage() {
                         className={`flex items-center justify-between p-2 rounded-lg text-sm cursor-pointer transition-colors ${
                           filterCategory === cat.id
                             ? 'bg-amber-100 text-amber-800'
-                            : 'hover:bg-slate-100'
+                            : 'hover:bg-muted'
                         }`}
                         onClick={() =>
                           setFilterCategory(filterCategory === cat.id ? 'all' : cat.id)
@@ -465,7 +513,7 @@ export default function MenuPage() {
                         </div>
                         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <button
-                            className={`p-1 ${isAdmin ? 'text-slate-400 hover:text-amber-600' : 'text-slate-200/40 cursor-not-allowed'}`}
+                            className={`p-1 ${isAdmin ? 'text-muted-foreground hover:text-amber-600' : 'text-slate-200/40 cursor-not-allowed'}`}
                             onClick={() => isAdmin && handleEditCategory(cat)}
                           >
                             <Pencil className="w-3 h-3" />
@@ -489,7 +537,7 @@ export default function MenuPage() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <Input
                         placeholder="Search items..."
                         value={searchQuery}
@@ -533,7 +581,7 @@ export default function MenuPage() {
                     <TableBody>
                       {filteredItems.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-slate-400">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             No menu items found
                           </TableCell>
                         </TableRow>
@@ -541,14 +589,12 @@ export default function MenuPage() {
                         filteredItems.map((item) => (
                           <TableRow key={item.id}>
                             <TableCell>
-                              <div className="h-10 w-14 overflow-hidden rounded-md border bg-slate-50">
-                                <Image
-                                  src={getItemImageSrc(item)}
-                                  alt={item.name}
+                              <div className="h-10 w-14 overflow-hidden rounded-md border bg-muted">
+                                <MenuItemImage
+                                  item={item}
                                   width={220}
                                   height={140}
                                   className="h-10 w-14 object-cover"
-                                  unoptimized
                                 />
                               </div>
                             </TableCell>
@@ -564,7 +610,7 @@ export default function MenuPage() {
                               <div>
                                 <span className="font-medium text-sm">{item.name}</span>
                                 {item.description && (
-                                  <p className="text-xs text-slate-400 truncate max-w-[200px]">
+                                  <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                                     {item.description}
                                   </p>
                                 )}
@@ -580,7 +626,7 @@ export default function MenuPage() {
                             </TableCell>
                             <TableCell>
                               {item.preparationTime ? (
-                                <span className="text-xs text-slate-500 flex items-center gap-1">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
                                   {item.preparationTime}m
                                 </span>
@@ -679,7 +725,7 @@ export default function MenuPage() {
                 />
               </div>
               <div className="rounded-lg border p-3">
-                <div className="mb-2 text-xs font-medium text-slate-600">Status</div>
+                <div className="mb-2 text-xs font-medium text-muted-foreground">Status</div>
                 <div className="flex items-center gap-3">
                   <Switch
                     checked={categoryForm.active}
@@ -711,7 +757,7 @@ export default function MenuPage() {
               </div>
             ) : null}
           </div>
-          <DialogFooter className="border-t bg-white px-4 py-3 sm:px-6">
+          <DialogFooter className="border-t bg-card px-4 py-3 sm:px-6">
             <Button
               variant="outline"
               onClick={() => setCategoryDialogOpen(false)}
@@ -749,13 +795,13 @@ export default function MenuPage() {
             </div>
           </DialogHeader>
           <div className="space-y-5 px-4 pb-4 sm:space-y-6 sm:px-6 sm:pb-6 overflow-y-auto">
-            <div className="rounded-xl border bg-slate-50 p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <div className="rounded-xl border bg-muted p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                 <ImageIcon className="h-4 w-4 text-amber-600" />
                 Item Image
               </div>
               <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-                <div className="h-20 w-28 overflow-hidden rounded-lg border bg-white shadow-sm">
+                <div className="h-20 w-28 overflow-hidden rounded-lg border bg-card shadow-sm">
                   {itemForm.image?.trim() ? (
                     <Image
                       src={itemForm.image}
@@ -766,7 +812,7 @@ export default function MenuPage() {
                       unoptimized
                     />
                   ) : (
-                    <div className="flex h-20 w-28 items-center justify-center bg-slate-50 text-slate-400">
+                    <div className="flex h-20 w-28 items-center justify-center bg-muted text-muted-foreground">
                       <div className="text-center">
                         <ImageIcon className="mx-auto h-5 w-5" />
                         <p className="mt-1 text-[10px]">No image</p>
@@ -797,7 +843,7 @@ export default function MenuPage() {
                     >
                       Remove Image
                     </Button>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-muted-foreground">
                       If removed, dummy image will be used in POS.
                     </p>
                   </div>
@@ -823,7 +869,7 @@ export default function MenuPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-xs text-black"
+                      className="h-7 px-2 text-xs text-foreground"
                       onClick={() => {
                         setEditingCategory(null)
                         setCategoryForm(defaultCategoryForm)
@@ -916,7 +962,7 @@ export default function MenuPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="border-t bg-white px-4 py-3 sm:px-6">
+          <DialogFooter className="border-t bg-card px-4 py-3 sm:px-6">
             <Button variant="outline" onClick={() => setItemDialogOpen(false)}>
               Cancel
             </Button>

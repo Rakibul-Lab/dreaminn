@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PosLiveSearchField } from './PosLiveSearchField'
 
 // Types
 interface MenuCategory {
@@ -84,15 +85,74 @@ interface CartItem {
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'ROOM_SERVICE'
 type DiscountType = 'PERCENTAGE' | 'AMOUNT'
 
+function buildFoodPlaceholderSrc(itemId: string, itemName: string, width: number, height: number) {
+  const params = new URLSearchParams({
+    seed: itemId,
+    name: itemName,
+    w: String(width),
+    h: String(height),
+  })
+  return `/api/placeholder/food?${params.toString()}`
+}
+
+function normalizeMenuImageSrc(image: string | null | undefined) {
+  const raw = image?.trim()
+  if (!raw) return null
+  if (
+    raw.startsWith('data:image/') ||
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('/')
+  ) {
+    return raw
+  }
+  return `/${raw.replace(/^\.?\//, '')}`
+}
+
+function MenuItemImage({
+  item,
+  width,
+  height,
+  className,
+}: {
+  item: Pick<MenuItem, 'id' | 'name' | 'image'>
+  width: number
+  height: number
+  className: string
+}) {
+  const fallbackSrc = buildFoodPlaceholderSrc(item.id, item.name, width, height)
+  const preferredSrc = normalizeMenuImageSrc(item.image) || fallbackSrc
+  const [src, setSrc] = useState(preferredSrc)
+
+  useEffect(() => {
+    setSrc(preferredSrc)
+  }, [preferredSrc])
+
+  return (
+    <Image
+      src={src}
+      alt={item.name}
+      width={width}
+      height={height}
+      className={className}
+      unoptimized
+      onError={() => {
+        if (src !== fallbackSrc) setSrc(fallbackSrc)
+      }}
+    />
+  )
+}
+
 export default function POSPage() {
   const user = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
 
   // State
+  const [now, setNow] = useState(() => new Date())
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
-  const [orderType, setOrderType] = useState<OrderType>('DINE_IN')
+  const [orderType, setOrderType] = useState<OrderType>('ROOM_SERVICE')
   const [tableId, setTableId] = useState<string>('')
   const [roomId, setRoomId] = useState<string>('')
   const [customerName, setCustomerName] = useState('')
@@ -101,6 +161,11 @@ export default function POSPage() {
   const [discountType, setDiscountType] = useState<DiscountType>('PERCENTAGE')
   const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   // Fetch menu categories
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
@@ -216,9 +281,22 @@ export default function POSPage() {
     setShowNotes(false)
   }, [])
 
+  const { data: restaurantSettings } = useQuery({
+    queryKey: ['restaurant-settings'],
+    queryFn: async () => {
+      const res = await api.get<{
+        success: boolean
+        data: { vatPercent: number; restaurantName: string }
+      }>('/settings/restaurant')
+      return res.data
+    },
+    enabled: !!user,
+    staleTime: 60_000,
+  })
+
   // Calculations
   const subtotal = cart.reduce((sum, c) => sum + c.menuItem.price * c.quantity, 0)
-  const vatPercent = 15
+  const vatPercent = restaurantSettings?.vatPercent ?? 15
   const discountAmount =
     discountType === 'PERCENTAGE'
       ? (subtotal * Math.max(0, Math.min(100, discount))) / 100
@@ -285,19 +363,28 @@ export default function POSPage() {
   // Available tables for dine-in
   const availableTables = tables.filter((t) => t.status === 'available')
 
-  const getItemImageSrc = (item: MenuItem) => {
-    if (item.image && item.image.trim()) return item.image
-    const params = new URLSearchParams({
-      seed: item.id,
-      name: item.name,
-      w: '360',
-      h: '220',
-    })
-    return `/api/placeholder/food?${params.toString()}`
-  }
+  const selectedRoom = occupiedRooms.find((r) => r.room_id === roomId)
+  const selectedTable = availableTables.find((t) => t.id === tableId)
+
+  const filterOccupiedRoom = useCallback((room: OccupiedRoom, query: string) => {
+    const q = query.toLowerCase()
+    return (
+      room.room_number.toLowerCase().includes(q) ||
+      room.room_type.toLowerCase().includes(q)
+    )
+  }, [])
+
+  const filterTable = useCallback((table: RestaurantTable, query: string) => {
+    const q = query.toLowerCase()
+    return (
+      table.tableNumber.toLowerCase().includes(q) ||
+      (table.location?.toLowerCase().includes(q) ?? false) ||
+      String(table.capacity).includes(q)
+    )
+  }, [])
 
   return (
-    <div className="flex h-[calc(100dvh-8.5rem)] max-h-[calc(100dvh-8.5rem)] bg-slate-50 overflow-hidden">
+    <div className="flex h-[calc(100dvh-8.5rem)] max-h-[calc(100dvh-8.5rem)] bg-muted overflow-hidden">
       {/* Left Panel - Menu */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -308,33 +395,43 @@ export default function POSPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-wide">CloudView</h1>
-              <p className="text-xs text-slate-400">Restaurant POS</p>
+              <p className="text-xs text-slate-300">Restaurant POS</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="border-amber-500/50 text-amber-400 text-xs">
               {user?.name || 'Staff'}
             </Badge>
-            <div className="text-xs text-slate-400">
-              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            <div className="text-right">
+              <div className="text-xs text-slate-200">
+                {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-[11px] text-slate-300">
+                {now.toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="px-4 py-3 bg-white border-b shrink-0">
+        <div className="px-4 py-3 bg-card border-b shrink-0">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search menu items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-10 bg-slate-50 border-slate-200"
+              className="pl-10 h-10 bg-muted border-border"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -343,7 +440,7 @@ export default function POSPage() {
         </div>
 
         {/* Category Tabs */}
-        <div className="px-4 py-2 bg-white border-b shrink-0">
+        <div className="px-4 py-2 bg-card border-b shrink-0">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
             <Button
               key="all"
@@ -392,7 +489,7 @@ export default function POSPage() {
               ))}
             </div>
           ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <UtensilsCrossed className="w-12 h-12 mb-3 opacity-30" />
               <p className="text-sm">No menu items found</p>
               {searchQuery && (
@@ -407,20 +504,18 @@ export default function POSPage() {
                   <button
                     key={item.id}
                     onClick={() => addToCart(item)}
-                    className={`text-left bg-white rounded-lg border-2 p-3 transition-all hover:shadow-md active:scale-[0.98] ${
+                    className={`text-left bg-card rounded-lg border-2 p-3 transition-all hover:shadow-md active:scale-[0.98] ${
                       inCart
                         ? 'border-amber-400 shadow-sm bg-amber-50/50'
-                        : 'border-slate-100 hover:border-amber-200'
+                        : 'border-border hover:border-amber-200'
                     }`}
                   >
-                    <div className="mb-2 overflow-hidden rounded-md border border-slate-100 bg-slate-50">
-                      <Image
-                        src={getItemImageSrc(item)}
-                        alt={item.name}
+                    <div className="mb-2 overflow-hidden rounded-md border border-border bg-muted">
+                      <MenuItemImage
+                        item={item}
                         width={360}
                         height={220}
                         className="h-24 w-full object-cover"
-                        unoptimized
                       />
                     </div>
                     <div className="flex items-start justify-between gap-1">
@@ -434,12 +529,12 @@ export default function POSPage() {
                             }`}
                             title={item.isVeg ? 'Vegetarian' : 'Non-Vegetarian'}
                           />
-                          <h3 className="font-semibold text-sm text-slate-800 truncate">
+                          <h3 className="font-semibold text-sm text-foreground truncate">
                             {item.name}
                           </h3>
                         </div>
                         {item.description && (
-                          <p className="text-[11px] text-slate-400 line-clamp-1 mb-1">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-1">
                             {item.description}
                           </p>
                         )}
@@ -455,7 +550,7 @@ export default function POSPage() {
                         ৳{item.price.toFixed(0)}
                       </span>
                       {item.preparationTime && (
-                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                           <Clock className="w-2.5 h-2.5" />
                           {item.preparationTime}m
                         </span>
@@ -470,7 +565,7 @@ export default function POSPage() {
       </div>
 
       {/* Right Panel - Order */}
-      <div className="w-[380px] bg-white border-l flex flex-col shrink-0 shadow-xl h-full max-h-full overflow-hidden">
+      <div className="w-[380px] bg-card border-l flex flex-col shrink-0 shadow-xl h-full max-h-full overflow-hidden">
         {/* Order Header */}
         <div className="px-4 py-3 bg-slate-900 text-white shrink-0">
           <div className="flex items-center justify-between mb-3">
@@ -480,7 +575,7 @@ export default function POSPage() {
                 variant="ghost"
                 size="sm"
                 onClick={clearCart}
-                className="text-slate-400 hover:text-red-400 hover:bg-transparent h-7 text-xs"
+                className="text-slate-300 hover:text-red-400 hover:bg-transparent h-7 text-xs"
               >
                 Clear All
               </Button>
@@ -506,7 +601,7 @@ export default function POSPage() {
                 className={`flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all ${
                   orderType === type
                     ? 'bg-amber-500 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -517,82 +612,59 @@ export default function POSPage() {
         </div>
 
         {/* Order Details Section */}
-        <div className="px-4 py-3 border-b bg-slate-50 shrink-0">
+        <div className="px-4 py-3 border-b bg-muted shrink-0">
           {orderType === 'DINE_IN' && (
-            <div>
-              <label className="text-xs font-medium text-slate-500 mb-1.5 block">
-                Select Table
-              </label>
-              {tablesLoading ? (
-                <Skeleton className="h-9 w-full" />
-              ) : (
-                <Select value={tableId} onValueChange={setTableId}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Choose a table..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableTables.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-slate-400">
-                        No available tables
-                      </div>
-                    ) : (
-                      availableTables.map((table) => (
-                        <SelectItem key={table.id} value={table.id}>
-                          <span className="flex items-center gap-2">
-                            Table {table.tableNumber}
-                            <span className="text-slate-400 text-xs">
-                              ({table.capacity} seats{table.location ? ` · ${table.location}` : ''})
-                            </span>
-                          </span>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+            <PosLiveSearchField
+              label="Select Table"
+              placeholder="Search table number or location…"
+              selectedId={tableId}
+              selectedLabel={
+                selectedTable
+                  ? `Table ${selectedTable.tableNumber}${selectedTable.location ? ` · ${selectedTable.location}` : ''}`
+                  : undefined
+              }
+              items={availableTables}
+              isLoading={tablesLoading}
+              getItemId={(t) => t.id}
+              getItemLabel={(t) => `Table ${t.tableNumber}`}
+              getItemSublabel={(t) =>
+                `${t.capacity} seats${t.location ? ` · ${t.location}` : ''}`
+              }
+              filterItem={filterTable}
+              onSelect={(t) => setTableId(t.id)}
+              onClear={() => setTableId('')}
+              emptyMessage="No available tables"
+              noResultsMessage="No tables match your search"
+            />
           )}
 
           {orderType === 'ROOM_SERVICE' && (
-            <div>
-              <label className="text-xs font-medium text-slate-500 mb-1.5 block">
-                Select Occupied Room
-              </label>
-              {roomsLoading ? (
-                <Skeleton className="h-9 w-full" />
-              ) : occupiedRooms.length === 0 ? (
-                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                  <BedDouble className="w-4 h-4 text-amber-500 shrink-0" />
-                  <p className="text-xs text-amber-700">
-                    No occupied rooms available for room service
-                  </p>
-                </div>
-              ) : (
-                <Select value={roomId} onValueChange={setRoomId}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Choose a room..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {occupiedRooms.map((room) => (
-                      <SelectItem key={room.room_id} value={room.room_id}>
-                        <span className="flex items-center gap-2">
-                          Room {room.room_number}
-                          <span className="text-slate-400 text-xs">
-                            ({room.room_type})
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+            <PosLiveSearchField
+              label="Select Occupied Room"
+              placeholder="Search room number or type…"
+              selectedId={roomId}
+              selectedLabel={
+                selectedRoom
+                  ? `Room ${selectedRoom.room_number} (${selectedRoom.room_type})`
+                  : undefined
+              }
+              items={occupiedRooms}
+              isLoading={roomsLoading}
+              getItemId={(r) => r.room_id}
+              getItemLabel={(r) => `Room ${r.room_number}`}
+              getItemSublabel={(r) => r.room_type}
+              filterItem={filterOccupiedRoom}
+              onSelect={(r) => setRoomId(r.room_id)}
+              onClear={() => setRoomId('')}
+              emptyMessage="No occupied rooms available for room service"
+              noResultsMessage="No rooms match your search"
+            />
           )}
 
           {orderType === 'TAKEAWAY' && (
             <div className="space-y-2">
               <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Customer Name *
                 </label>
                 <Input
@@ -603,7 +675,7 @@ export default function POSPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Phone Number
                 </label>
                 <Input
@@ -621,7 +693,7 @@ export default function POSPage() {
         <ScrollArea className="flex-1 min-h-0 overflow-hidden">
           <div className="p-4">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-300">
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <ShoppingBag className="w-10 h-10 mb-2" />
                 <p className="text-sm">No items in cart</p>
                 <p className="text-xs mt-1">Tap menu items to add</p>
@@ -631,7 +703,7 @@ export default function POSPage() {
                 {cart.map((item) => (
                   <div
                     key={item.menuItem.id}
-                    className="flex items-start gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100"
+                    className="flex items-start gap-2 p-2.5 bg-muted rounded-lg border border-border"
                   >
                     <span
                       className={`w-2.5 h-2.5 rounded-full border mt-1.5 shrink-0 ${
@@ -641,7 +713,7 @@ export default function POSPage() {
                       }`}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
+                      <p className="text-sm font-medium text-foreground truncate">
                         {item.menuItem.name}
                       </p>
                       <p className="text-xs text-amber-700 font-semibold">
@@ -685,12 +757,12 @@ export default function POSPage() {
         </ScrollArea>
 
         {/* Order Summary & Actions */}
-        <div className="border-t bg-white shrink-0 sticky bottom-0 z-10">
+        <div className="border-t bg-card shrink-0 sticky bottom-0 z-10">
           {/* Notes */}
           {cart.length > 0 && (
             <div className="px-4 pt-3">
               <div className="flex justify-end items-center gap-2">
-                <span className="text-xs font-medium text-slate-600">Notes</span>
+                <span className="text-xs font-medium text-muted-foreground">Notes</span>
                 <Switch
                   checked={showNotes}
                   onCheckedChange={setShowNotes}
@@ -713,11 +785,11 @@ export default function POSPage() {
           {/* Totals */}
           <div className="px-4 py-3 space-y-1.5">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Subtotal</span>
+              <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">৳{subtotal.toFixed(0)}</span>
             </div>
             <div className="flex justify-between text-sm items-center">
-              <span className="text-slate-500">Discount</span>
+              <span className="text-muted-foreground">Discount</span>
               <div className="flex items-center gap-1.5">
                 <Select
                   value={discountType}
@@ -742,12 +814,12 @@ export default function POSPage() {
                 />
               </div>
             </div>
-            <div className="flex justify-between text-xs text-slate-500">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>Discount Applied</span>
               <span>৳{discountAmount.toFixed(0)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">VAT ({vatPercent}%)</span>
+              <span className="text-muted-foreground">VAT ({vatPercent}%)</span>
               <span className="font-medium">৳{vatAmount.toFixed(0)}</span>
             </div>
             <Separator />

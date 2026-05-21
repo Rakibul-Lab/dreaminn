@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Plus, Play, CheckCircle2, Clock, SprayCan } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { getPaginationPages } from '@/lib/pagination-pages';
+import { cn } from '@/lib/utils';
 
 interface HousekeepingTask {
   id: string;
@@ -46,6 +48,8 @@ interface Room {
 export function HousekeepingPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [startDialogOpen, setStartDialogOpen] = useState(false);
   const [startTask, setStartTask] = useState<HousekeepingTask | null>(null);
@@ -58,15 +62,34 @@ export function HousekeepingPage() {
   const [formAssignedTo, setFormAssignedTo] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
-  const buildQuery = () => {
-    const params: string[] = ['limit=50'];
-    if (statusFilter !== 'all') params.push(`status=${statusFilter}`);
+  const buildQuery = (status?: string, p = page, limit = pageSize) => {
+    const params: string[] = [`page=${p}`, `limit=${limit}`];
+    const s = status ?? (statusFilter !== 'all' ? statusFilter : undefined);
+    if (s) params.push(`status=${s}`);
     return `/housekeeping?${params.join('&')}`;
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['housekeeping', statusFilter],
-    queryFn: () => api.get<{ success: boolean; data: HousekeepingTask[]; meta: { total: number } }>(buildQuery()),
+    queryKey: ['housekeeping', statusFilter, page, pageSize],
+    queryFn: () =>
+      api.get<{
+        success: boolean;
+        data: HousekeepingTask[];
+        meta: { total: number; page: number; totalPages: number };
+      }>(buildQuery()),
+  });
+
+  const { data: pendingCountData } = useQuery({
+    queryKey: ['housekeeping-count', 'PENDING'],
+    queryFn: () => api.get(buildQuery('PENDING', 1, 1)),
+  });
+  const { data: inProgressCountData } = useQuery({
+    queryKey: ['housekeeping-count', 'IN_PROGRESS'],
+    queryFn: () => api.get(buildQuery('IN_PROGRESS', 1, 1)),
+  });
+  const { data: completedCountData } = useQuery({
+    queryKey: ['housekeeping-count', 'COMPLETED'],
+    queryFn: () => api.get(buildQuery('COMPLETED', 1, 1)),
   });
 
   const { data: roomsData } = useQuery({
@@ -75,6 +98,11 @@ export function HousekeepingPage() {
   });
 
   const tasks = ((data as any)?.data || []) as HousekeepingTask[];
+  const total = (data as any)?.meta?.total || 0;
+  const totalPages = Math.max((data as any)?.meta?.totalPages || 1, 1);
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+  const pageNumbers = getPaginationPages(page, totalPages);
   const rooms = ((roomsData as any)?.data || []) as Room[];
 
   // Get staff list for assignment - we can reuse the rooms data for now
@@ -99,6 +127,7 @@ export function HousekeepingPage() {
     mutationFn: (body: any) => api.post('/housekeeping', body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['housekeeping'] });
+      queryClient.invalidateQueries({ queryKey: ['housekeeping-count'] });
       toast.success('Task created successfully');
       closeCreateDialog();
     },
@@ -113,6 +142,7 @@ export function HousekeepingPage() {
         return;
       }
       queryClient.invalidateQueries({ queryKey: ['housekeeping'] });
+      queryClient.invalidateQueries({ queryKey: ['housekeeping-count'] });
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       toast.success('Task updated successfully');
       setStartDialogOpen(false);
@@ -174,7 +204,7 @@ export function HousekeepingPage() {
       case 'cleaning':
         return <SprayCan className="w-4 h-4 text-amber-500" />;
       case 'maintenance':
-        return <Clock className="w-4 h-4 text-slate-500" />;
+        return <Clock className="w-4 h-4 text-muted-foreground" />;
       case 'deep_clean':
         return <SprayCan className="w-4 h-4 text-emerald-500" />;
       default:
@@ -182,15 +212,11 @@ export function HousekeepingPage() {
     }
   };
 
-  const getStatusCounts = () => {
-    return {
-      pending: tasks.filter((t) => t.status === 'PENDING').length,
-      inProgress: tasks.filter((t) => t.status === 'IN_PROGRESS').length,
-      completed: tasks.filter((t) => t.status === 'COMPLETED').length,
-    };
+  const counts = {
+    pending: (pendingCountData as any)?.meta?.total ?? 0,
+    inProgress: (inProgressCountData as any)?.meta?.total ?? 0,
+    completed: (completedCountData as any)?.meta?.total ?? 0,
   };
-
-  const counts = getStatusCounts();
 
   return (
     <div className="space-y-6">
@@ -239,7 +265,13 @@ export function HousekeepingPage() {
 
       {/* Filter */}
       <div className="flex items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v);
+            setPage(1);
+          }}
+        >
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Filter status" />
           </SelectTrigger>
@@ -254,27 +286,30 @@ export function HousekeepingPage() {
 
       {/* Tasks Table */}
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-lg" />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            {Array.from({ length: pageSize }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="rounded-lg border max-h-[500px] overflow-y-auto custom-scrollbar">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 sticky top-0">
-              <tr>
-                <th className="text-left p-3 font-medium">Room</th>
-                <th className="text-left p-3 font-medium">Task Type</th>
-                <th className="text-left p-3 font-medium">Assigned To</th>
-                <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-left p-3 font-medium">Created</th>
-                <th className="text-left p-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="rounded-xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className="max-h-[min(70vh,720px)] overflow-auto custom-scrollbar">
+            <table className="bookings-sticky-table w-full min-w-[800px] text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="p-3 text-left font-medium">Room</th>
+                  <th className="p-3 text-left font-medium">Task Type</th>
+                  <th className="p-3 text-left font-medium">Assigned To</th>
+                  <th className="p-3 text-left font-medium">Status</th>
+                  <th className="p-3 text-left font-medium">Created</th>
+                  <th className="p-3 text-left font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-background">
               {tasks.map((task) => (
-                <tr key={task.id} className="border-t hover:bg-muted/30">
+                <tr key={task.id} className="border-b border-border/60 hover:bg-muted/40">
                   <td className="p-3">
                     <div>
                       <p className="font-medium">Room {task.room?.roomNumber}</p>
@@ -336,8 +371,78 @@ export function HousekeepingPage() {
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-col gap-3 border-t bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {total === 0 ? 'No results' : `Showing ${rangeStart}–${rangeEnd} of ${total}`}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[110px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <div className="flex flex-wrap items-center gap-1">
+                {pageNumbers.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="flex h-8 min-w-8 items-center justify-center px-1 text-sm text-muted-foreground"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={item}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        'h-8 min-w-8 px-2',
+                        item === page &&
+                          'border-amber-600 bg-amber-600 text-white hover:bg-amber-700 hover:text-white'
+                      )}
+                      onClick={() => setPage(item)}
+                      aria-current={item === page ? 'page' : undefined}
+                    >
+                      {item}
+                    </Button>
+                  )
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -169,8 +169,8 @@ export function RoomsPage() {
       case 'OCCUPIED': return 'border-l-red-500';
       case 'CLEANING': return 'border-l-amber-500';
       case 'IN_PROGRESS': return 'border-l-orange-500';
-      case 'MAINTENANCE': return 'border-l-slate-400';
-      default: return 'border-l-slate-300';
+      case 'MAINTENANCE': return 'border-l-muted-foreground';
+      default: return 'border-l-border';
     }
   };
 

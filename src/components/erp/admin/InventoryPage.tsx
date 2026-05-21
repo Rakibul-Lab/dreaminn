@@ -179,11 +179,11 @@ export default function InventoryPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Package className="h-6 w-6 text-amber-600" />
             Inventory
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Manage stock items and supplies</p>
+          <p className="text-muted-foreground text-sm mt-1">Manage stock items and supplies</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -211,7 +211,7 @@ export default function InventoryPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {lowStockItems.map((item) => (
-                <Badge key={item.id} variant="outline" className="bg-white text-red-700 border-red-300">
+                <Badge key={item.id} variant="outline" className="bg-card text-red-700 border-red-300">
                   {item.name}: {item.quantity} {item.unit} (min: {item.minQuantity})
                 </Badge>
               ))}
@@ -226,7 +226,7 @@ export default function InventoryPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2 text-slate-400" />
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -276,22 +276,22 @@ export default function InventoryPage() {
                   ))
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">No items found</TableCell>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No items found</TableCell>
                   </TableRow>
                 ) : (
                   items.map((item) => {
                     const isLow = item.quantity <= item.minQuantity
                     return (
-                      <TableRow key={item.id} className={`hover:bg-slate-50 ${isLow ? 'bg-red-50/50' : ''}`}>
+                      <TableRow key={item.id} className={`hover:bg-muted ${isLow ? 'bg-red-50/50' : ''}`}>
                         <TableCell className="font-medium">{item.name}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{item.category || 'Uncategorized'}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{item.unit}</TableCell>
-                        <TableCell className={`text-right font-semibold ${isLow ? 'text-red-600' : 'text-slate-800'}`}>
+                        <TableCell className={`text-right font-semibold ${isLow ? 'text-red-600' : 'text-foreground'}`}>
                           {item.quantity}
                         </TableCell>
-                        <TableCell className="text-right text-sm text-slate-500">{item.minQuantity}</TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">{item.minQuantity}</TableCell>
                         <TableCell>
                           {isLow ? (
                             <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
@@ -333,7 +333,7 @@ export default function InventoryPage() {
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</Button>
-          <span className="flex items-center px-3 text-sm text-slate-600">Page {page} of {totalPages}</span>
+          <span className="flex items-center px-3 text-sm text-muted-foreground">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</Button>
         </div>
       )}

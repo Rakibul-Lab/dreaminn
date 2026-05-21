@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { successResponse, errorResponse, notFoundResponse, logActivity } from '@/lib/api-utils';
+import { bookingVatOptions, computeRoomBookingTotals, sumBookingNetPaid } from '@/lib/booking-totals';
+import { parsePaymentMethod } from '@/lib/payment-method';
 import { RoleType } from '@prisma/client';
 
 export async function POST(
@@ -42,23 +44,7 @@ export async function POST(
       return errorResponse('Only reserved bookings can be checked in');
     }
 
-    // Update booking: set status, actualCheckIn, initialPayment, recalculate due
     const initialPaymentAmount = initialPayment ? parseFloat(String(initialPayment)) : 0;
-    const dueAmount = booking.totalRoomCharge - booking.advancePayment - initialPaymentAmount;
-
-    const updatedBooking = await db.booking.update({
-      where: { id },
-      data: {
-        status: 'CHECKED_IN',
-        actualCheckIn: new Date(),
-        initialPayment: initialPaymentAmount,
-        dueAmount,
-      },
-      include: {
-        customer: true,
-        room: { include: { type: true } },
-      },
-    });
 
     // Update room status to OCCUPIED
     await db.room.update({
@@ -71,7 +57,7 @@ export async function POST(
       await db.payment.create({
         data: {
           amount: initialPaymentAmount,
-          method: paymentMethod || 'CASH',
+          method: parsePaymentMethod(paymentMethod, 'CASH'),
           paymentType: 'INITIAL',
           bookingId: id,
           receivedBy: authUser.id,
@@ -79,6 +65,31 @@ export async function POST(
         },
       });
     }
+
+    const paymentRows = await db.payment.findMany({
+      where: { bookingId: id },
+      select: { amount: true, paymentType: true },
+    });
+    const totalPaid = sumBookingNetPaid(paymentRows);
+    const { dueAmount } = computeRoomBookingTotals(
+      booking.totalRoomCharge,
+      totalPaid,
+      bookingVatOptions(booking)
+    );
+
+    const updatedBooking = await db.booking.update({
+      where: { id },
+      data: {
+        status: 'CHECKED_IN',
+        actualCheckIn: new Date(),
+        initialPayment: (booking.initialPayment || 0) + initialPaymentAmount,
+        dueAmount,
+      },
+      include: {
+        customer: true,
+        room: { include: { type: true } },
+      },
+    });
 
     await logActivity(
       authUser.id,

@@ -83,7 +83,7 @@ function OrderTimer({ createdAt }: { createdAt: string }) {
 
   return (
     <div className={`flex items-center gap-1 text-xs font-mono ${
-      isUrgent ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-slate-500'
+      isUrgent ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-muted-foreground'
     }`}>
       <Clock className="w-3 h-3" />
       {elapsed}
@@ -165,7 +165,7 @@ export default function KitchenPage() {
             ? 'border-red-300 bg-red-50/50 shadow-red-100'
             : isWarning
             ? 'border-amber-200 bg-amber-50/30'
-            : 'border-slate-200'
+            : 'border-border'
         }`}
       >
         <CardHeader className="pb-2 pt-3 px-3">
@@ -176,7 +176,7 @@ export default function KitchenPage() {
             <OrderTimer createdAt={order.createdAt} />
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <div className="flex items-center gap-1 text-xs text-slate-600">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <TypeIcon className="w-3 h-3" />
               {typeCfg.label}
             </div>
@@ -223,7 +223,7 @@ export default function KitchenPage() {
           )}
 
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700">
+            <span className="text-xs font-semibold text-foreground">
               ৳{order.totalAmount.toFixed(0)}
             </span>
             {nextStatus && (
@@ -251,7 +251,7 @@ export default function KitchenPage() {
   const isLoading = pendingLoading || cookingLoading || readyLoading
 
   return (
-    <div className="h-full flex flex-col bg-slate-100">
+    <div className="h-full flex flex-col bg-muted">
       {/* Header */}
       <div className="bg-slate-900 text-white px-6 py-3 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -260,14 +260,14 @@ export default function KitchenPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold">Kitchen Display</h1>
-            <p className="text-xs text-slate-400">CloudView KDS</p>
+            <p className="text-xs text-slate-300">CloudView KDS</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
-            className="text-slate-400 hover:text-white"
+            className="text-muted-foreground hover:text-white"
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] })
               toast.success('Refreshed orders')
@@ -276,7 +276,7 @@ export default function KitchenPage() {
             <RefreshCw className="w-4 h-4 mr-1" />
             Refresh
           </Button>
-          <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Auto-refresh: 2s</span>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function KitchenPage() {
           <div className="flex items-center justify-between mb-3 px-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-yellow-400" />
-              <h2 className="font-bold text-sm text-slate-700">Pending</h2>
+              <h2 className="font-bold text-sm text-foreground">Pending</h2>
               <Badge variant="secondary" className="text-xs h-5">
                 {pendingOrders.length}
               </Badge>
@@ -303,7 +303,7 @@ export default function KitchenPage() {
                 ))}
               </div>
             ) : pendingOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
                 <CheckCircle2 className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-xs">No pending orders</p>
               </div>
@@ -322,7 +322,7 @@ export default function KitchenPage() {
           <div className="flex items-center justify-between mb-3 px-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <h2 className="font-bold text-sm text-slate-700">Cooking</h2>
+              <h2 className="font-bold text-sm text-foreground">Cooking</h2>
               <Badge variant="secondary" className="text-xs h-5">
                 {cookingOrders.length}
               </Badge>
@@ -336,7 +336,7 @@ export default function KitchenPage() {
                 ))}
               </div>
             ) : cookingOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
                 <ChefHat className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-xs">No orders cooking</p>
               </div>
@@ -355,7 +355,7 @@ export default function KitchenPage() {
           <div className="flex items-center justify-between mb-3 px-1">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500" />
-              <h2 className="font-bold text-sm text-slate-700">Ready</h2>
+              <h2 className="font-bold text-sm text-foreground">Ready</h2>
               <Badge variant="secondary" className="text-xs h-5">
                 {readyOrders.length}
               </Badge>
@@ -369,7 +369,7 @@ export default function KitchenPage() {
                 ))}
               </div>
             ) : readyOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
                 <CheckCircle2 className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-xs">No orders ready</p>
               </div>

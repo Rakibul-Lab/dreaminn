@@ -14,12 +14,13 @@ import {
   LogIn,
   LogOut,
   SprayCan,
-  DollarSign,
   TrendingUp,
   ShoppingCart,
   ChefHat,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { openNewReservationTab } from '@/lib/reservation-navigation';
+import { TakaIcon } from '@/components/icons/TakaIcon';
 import {
   PieChart,
   Pie,
@@ -169,10 +170,10 @@ function HotelAdminDashboard({
       <div className="flex flex-wrap gap-3">
         <Button
           className="bg-amber-600 hover:bg-amber-700 text-white"
-          onClick={() => onNavigate?.('bookings')}
+          onClick={openNewReservationTab}
         >
           <CalendarCheck2 className="w-4 h-4 mr-2" />
-          New Booking
+          New Reservation
         </Button>
         <Button
           variant="outline"
@@ -184,7 +185,7 @@ function HotelAdminDashboard({
         </Button>
         <Button
           variant="outline"
-          className="border-slate-400 text-slate-600 hover:bg-slate-50"
+          className="border-border text-muted-foreground hover:bg-muted"
           onClick={() => onNavigate?.('bookings')}
         >
           <LogOut className="w-4 h-4 mr-2" />
@@ -238,7 +239,7 @@ function HotelAdminDashboard({
           <StatCard
             title="Hotel Revenue"
             value={`৳${data.revenue.hotelRevenue.toLocaleString()}`}
-            icon={<DollarSign className="w-5 h-5" />}
+            icon={<TakaIcon className="w-5 h-5 text-amber-600" />}
             color="amber"
           />
           <StatCard
@@ -256,7 +257,7 @@ function HotelAdminDashboard({
           <StatCard
             title="Total Due"
             value={`৳${data.revenue.totalDue.toLocaleString()}`}
-            icon={<DollarSign className="w-5 h-5" />}
+            icon={<TakaIcon className="w-5 h-5 text-amber-600" />}
             color="red"
           />
         </div>
@@ -360,7 +361,7 @@ function HotelAdminDashboard({
         {/* Recent Bookings */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Recent Bookings</CardTitle>
+            <CardTitle className="text-base">Recent Reservations</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-h-64 overflow-y-auto custom-scrollbar">
@@ -437,7 +438,7 @@ function StatCard({
   color: 'slate' | 'red' | 'emerald' | 'amber' | 'orange';
 }) {
   const colorMap = {
-    slate: 'bg-slate-100 text-slate-600',
+    slate: 'bg-muted text-muted-foreground',
     red: 'bg-red-50 text-red-600',
     emerald: 'bg-emerald-50 text-emerald-600',
     amber: 'bg-amber-50 text-amber-600',
@@ -516,8 +517,8 @@ function RestaurantDashboard({ data }: { data: DashboardData }) {
           <ChefHat className="h-6 w-6 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-slate-800">CloudView Restaurant</h2>
-          <p className="text-sm text-slate-500">Dashboard Overview</p>
+          <h2 className="text-xl font-bold text-foreground">CloudView Restaurant</h2>
+          <p className="text-sm text-muted-foreground">Dashboard Overview</p>
         </div>
       </div>
 
@@ -532,7 +533,7 @@ function RestaurantDashboard({ data }: { data: DashboardData }) {
         <StatCard
           title="Today's Sales"
           value={`৳${(sales.todaysSales || restaurant.todaysFoodSales).toLocaleString()}`}
-          icon={<DollarSign className="w-5 h-5" />}
+          icon={<TakaIcon className="w-5 h-5 text-emerald-600" />}
           color="emerald"
         />
         <StatCard
@@ -591,7 +592,7 @@ function RestaurantDashboard({ data }: { data: DashboardData }) {
               {(kotQueue.items || []).length > 0 && (
                 <div className="mt-2 max-h-32 overflow-y-auto custom-scrollbar">
                   {(kotQueue.items || []).map((item: any, i: number) => (
-                    <div key={i} className="text-xs text-slate-500 py-1 border-b border-slate-100">
+                    <div key={i} className="text-xs text-muted-foreground py-1 border-b border-border">
                       {item.name} × {item.quantity}
                     </div>
                   ))}
@@ -621,17 +622,17 @@ function RestaurantDashboard({ data }: { data: DashboardData }) {
                   <p className="text-2xl font-bold text-amber-700">{tables.reserved}</p>
                   <p className="text-xs text-amber-600">Reserved</p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
-                  <p className="text-2xl font-bold text-slate-700">{rooms?.occupied || 0}</p>
-                  <p className="text-xs text-slate-600">Room Service</p>
+                <div className="p-3 rounded-lg bg-muted border border-border text-center">
+                  <p className="text-2xl font-bold text-foreground">{rooms?.occupied || 0}</p>
+                  <p className="text-xs text-muted-foreground">Room Service</p>
                 </div>
               </div>
 
               {sales.averageOrderValue > 0 && (
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3 rounded-lg bg-muted border border-border">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Avg Order Value</span>
-                    <span className="font-semibold text-slate-800">৳{sales.averageOrderValue.toLocaleString()}</span>
+                    <span className="text-sm text-muted-foreground">Avg Order Value</span>
+                    <span className="font-semibold text-foreground">৳{sales.averageOrderValue.toLocaleString()}</span>
                   </div>
                 </div>
               )}

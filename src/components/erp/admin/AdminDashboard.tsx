@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import {
-  LayoutDashboard, DollarSign, BedDouble, UtensilsCrossed, Users, Activity,
+  LayoutDashboard, BedDouble, UtensilsCrossed, Users, Activity,
   Database, ScrollText, AlertTriangle, TrendingUp, ArrowUpRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import { Separator } from '@/components/ui/separator'
+import { TakaIcon } from '@/components/icons/TakaIcon'
 
 const revenueChartConfig: ChartConfig = {
   amount: { label: 'Revenue', color: '#d97706' },
@@ -79,7 +80,7 @@ export default function AdminDashboard() {
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
         <LayoutDashboard className="h-6 w-6 text-amber-600" />
-        <h2 className="text-2xl font-bold text-slate-800">Admin Dashboard</h2>
+        <h2 className="text-2xl font-bold text-foreground">Admin Dashboard</h2>
       </div>
 
       {isLoading ? (
@@ -95,11 +96,11 @@ export default function AdminDashboard() {
             <Card className="border-l-4 border-l-amber-500">
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="p-3 rounded-lg bg-amber-50">
-                  <DollarSign className="h-6 w-6 text-amber-600" />
+                  <TakaIcon className="h-6 w-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Total Revenue</p>
-                  <p className="text-2xl font-bold text-slate-800">৳{(revenue?.totalRevenue || 0).toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">Total Revenue</p>
+                  <p className="text-2xl font-bold text-foreground">৳{(revenue?.totalRevenue || 0).toLocaleString()}</p>
                 </div>
               </CardContent>
             </Card>
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
                   <BedDouble className="h-6 w-6 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Hotel Revenue</p>
+                  <p className="text-sm text-muted-foreground">Hotel Revenue</p>
                   <p className="text-2xl font-bold text-emerald-700">৳{(revenue?.hotelRevenue || 0).toLocaleString()}</p>
                 </div>
               </CardContent>
@@ -122,7 +123,7 @@ export default function AdminDashboard() {
                   <UtensilsCrossed className="h-6 w-6 text-sky-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Restaurant Revenue</p>
+                  <p className="text-sm text-muted-foreground">Restaurant Revenue</p>
                   <p className="text-2xl font-bold text-sky-700">৳{(revenue?.restaurantRevenue || 0).toLocaleString()}</p>
                 </div>
               </CardContent>
@@ -134,7 +135,7 @@ export default function AdminDashboard() {
                   <Users className="h-6 w-6 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Total Bookings</p>
+                  <p className="text-sm text-muted-foreground">Total Bookings</p>
                   <p className="text-2xl font-bold text-purple-700">{(d.activeBookings || 0) as number}</p>
                 </div>
               </CardContent>
@@ -146,7 +147,7 @@ export default function AdminDashboard() {
                   <Activity className="h-6 w-6 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Today&apos;s Orders</p>
+                  <p className="text-sm text-muted-foreground">Today&apos;s Orders</p>
                   <p className="text-2xl font-bold text-orange-700">{(restaurant?.todaysOrders || 0) as number}</p>
                 </div>
               </CardContent>
@@ -158,7 +159,7 @@ export default function AdminDashboard() {
                   <TrendingUp className="h-6 w-6 text-rose-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">Occupancy Rate</p>
+                  <p className="text-sm text-muted-foreground">Occupancy Rate</p>
                   <p className="text-2xl font-bold text-rose-700">{(rooms?.occupancyRate || 0) as number}%</p>
                 </div>
               </CardContent>
@@ -185,7 +186,7 @@ export default function AdminDashboard() {
                   </BarChart>
                 </ChartContainer>
               ) : (
-                <p className="text-center text-slate-500 py-8">No revenue data available</p>
+                <p className="text-center text-muted-foreground py-8">No revenue data available</p>
               )}
             </CardContent>
           </Card>
@@ -202,17 +203,17 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="space-y-3 max-h-80 overflow-y-auto">
                   {recentActivities?.length ? recentActivities.slice(0, 10).map((activity, i) => (
-                    <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50">
+                    <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted">
                       <div className="h-2 w-2 rounded-full bg-amber-400 mt-2 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{(activity.action as string) || 'Unknown'}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm font-medium text-foreground truncate">{(activity.action as string) || 'Unknown'}</p>
+                        <p className="text-xs text-muted-foreground">
                           {(activity.user as Record<string, string>)?.name || 'System'} &bull; {activity.module as string} &bull; {format(new Date(activity.createdAt as string), 'MMM dd, HH:mm')}
                         </p>
                       </div>
                     </div>
                   )) : (
-                    <p className="text-center text-slate-500 py-4">No recent activities</p>
+                    <p className="text-center text-muted-foreground py-4">No recent activities</p>
                   )}
                 </div>
               </CardContent>
@@ -229,28 +230,28 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Active Bookings</span>
+                    <span className="text-sm text-muted-foreground">Active Bookings</span>
                     <Badge variant="outline" className="bg-emerald-50 text-emerald-700">{(d.activeBookings || 0) as number}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Pending Invoices</span>
+                    <span className="text-sm text-muted-foreground">Pending Invoices</span>
                     <Badge variant="outline" className="bg-amber-50 text-amber-700">{(d.pendingInvoices || 0) as number}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Rooms Available</span>
+                    <span className="text-sm text-muted-foreground">Rooms Available</span>
                     <Badge variant="outline" className="bg-sky-50 text-sky-700">{(rooms?.available || 0) as number} / {(rooms?.total || 0) as number}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Active Orders</span>
+                    <span className="text-sm text-muted-foreground">Active Orders</span>
                     <Badge variant="outline" className="bg-purple-50 text-purple-700">{(restaurant?.activeOrders || 0) as number}</Badge>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">Total Due</span>
+                    <span className="text-sm text-muted-foreground">Total Due</span>
                     <Badge variant="outline" className="bg-red-50 text-red-700">৳{(revenue?.totalDue || 0).toLocaleString()}</Badge>
                   </div>
                   <Separator />
                   <div>
-                    <p className="text-sm font-medium text-slate-700 mb-2">Quick Actions</p>
+                    <p className="text-sm font-medium text-foreground mb-2">Quick Actions</p>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={handleSeedDB}>
                         <Database className="h-3 w-3 mr-1" /> Seed DB

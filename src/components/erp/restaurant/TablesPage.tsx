@@ -202,7 +202,7 @@ export default function TablesPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
+    <div className="h-full flex flex-col bg-muted">
       {/* Header */}
       <div className="bg-slate-900 text-white px-6 py-4 shrink-0">
         <div className="flex items-center justify-between">
@@ -212,7 +212,7 @@ export default function TablesPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Table Management</h1>
-              <p className="text-xs text-slate-400">CloudView Restaurant</p>
+              <p className="text-xs text-slate-300">CloudView Restaurant</p>
             </div>
           </div>
           <Button
@@ -230,20 +230,20 @@ export default function TablesPage() {
       </div>
 
       {/* Stats & Filters */}
-      <div className="px-6 py-4 bg-white border-b shrink-0">
+      <div className="px-6 py-4 bg-card border-b shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-xs text-slate-600">Available: <strong>{availableCount}</strong></span>
+              <span className="text-xs text-muted-foreground">Available: <strong>{availableCount}</strong></span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-xs text-slate-600">Occupied: <strong>{occupiedCount}</strong></span>
+              <span className="text-xs text-muted-foreground">Occupied: <strong>{occupiedCount}</strong></span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-amber-500" />
-              <span className="text-xs text-slate-600">Reserved: <strong>{reservedCount}</strong></span>
+              <span className="text-xs text-muted-foreground">Reserved: <strong>{reservedCount}</strong></span>
             </div>
           </div>
           <Select value={filterLocation} onValueChange={setFilterLocation}>
@@ -269,7 +269,7 @@ export default function TablesPage() {
             ))}
           </div>
         ) : filteredTables.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Armchair className="w-12 h-12 mb-3 opacity-30" />
             <p className="text-sm">No tables found</p>
             <p className="text-xs mt-1">Add tables to get started</p>
@@ -292,12 +292,12 @@ export default function TablesPage() {
                         <StatusIcon className={`w-6 h-6 ${statusCfg.color}`} />
                       </div>
                     </div>
-                    <h3 className="font-bold text-lg text-slate-800">
+                    <h3 className="font-bold text-lg text-foreground">
                       {table.tableNumber}
                     </h3>
                     <div className="flex items-center justify-center gap-1 mt-1">
-                      <Users className="w-3 h-3 text-slate-400" />
-                      <span className="text-xs text-slate-500">{table.capacity} seats</span>
+                      <Users className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">{table.capacity} seats</span>
                     </div>
                     {table.location && (
                       <Badge variant="outline" className="mt-2 text-[10px]">
@@ -311,7 +311,7 @@ export default function TablesPage() {
                     </Badge>
 
                     {/* Quick Status Buttons */}
-                    <div className="mt-3 pt-2 border-t border-slate-200/50">
+                    <div className="mt-3 pt-2 border-t border-border/50">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button

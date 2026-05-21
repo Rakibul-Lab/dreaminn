@@ -62,13 +62,15 @@ model Room {
 model Customer {
   id        String    @id @default(cuid())
   name      String
+  company   String?
   email     String?
   phone     String
   address   String?
-  idType    String?
-  idNumber  String?
-  idDocPath String?
-  notes     String?
+  idType       String?
+  idNumber     String?
+  dateOfBirth  String?
+  idDocPath    String?
+  notes        String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   bookings  Booking[]
@@ -77,7 +79,8 @@ model Customer {
 }
 
 model Booking {
-  id               String            @id @default(cuid())
+  id                 String            @id @default(cuid())
+  confirmationNumber String?           @unique @map("confirmation_number")
   customerId       String
   roomId           String
   status           BookingStatus     @default(RESERVED)
@@ -91,6 +94,9 @@ model Booking {
   advancePayment   Float             @default(0)
   initialPayment   Float             @default(0)
   dueAmount        Float             @default(0)
+  vatApplied       Boolean           @default(true) @map("vat_applied")
+  vatPercent       Float             @default(15) @map("vat_percent")
+  company          String?
   notes            String?
   createdBy        String
   createdAt        DateTime          @default(now())
@@ -102,11 +108,24 @@ model Booking {
   payments         Payment[]
   restaurantOrders RestaurantOrder[]
   charges          RoomCharge[]
+  idDocuments      BookingIdDocument[]
 
   @@index([createdBy], map: "bookings_createdBy_fkey")
   @@index([customerId], map: "bookings_customerId_fkey")
   @@index([roomId], map: "bookings_roomId_fkey")
   @@map("bookings")
+}
+
+model BookingIdDocument {
+  id        String   @id @default(cuid())
+  bookingId String   @map("booking_id")
+  filePath  String   @map("file_path")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId], map: "booking_id_documents_booking_id_fkey")
+  @@map("booking_id_documents")
 }
 
 model RoomCharge {
@@ -390,6 +409,7 @@ enum BookingStatus {
 enum ChargeType {
   ROOM_RATE
   LATE_CHECKOUT
+  EARLY_CHECKOUT
   EXTRA_SERVICE
   MINIBAR
   LAUNDRY
@@ -411,9 +431,13 @@ enum OrderStatus {
 }
 
 enum PaymentMethod {
+  NONE
   CASH
   CARD
   MOBILE_BANKING
+  BKASH
+  NAGAD
+  UPAY
 }
 
 enum PaymentType {
@@ -422,6 +446,7 @@ enum PaymentType {
   FINAL
   PARTIAL
   RESTAURANT
+  REFUND
 }
 
 enum InvoiceStatus {

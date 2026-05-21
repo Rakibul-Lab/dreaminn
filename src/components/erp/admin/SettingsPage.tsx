@@ -5,6 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { useAuthStore, canAccessAdmin } from '@/lib/auth-store'
 import { useToast } from '@/hooks/use-toast'
+import { getSettingDefinition } from '@/lib/setting-definitions'
+import { toTimeInputValue } from '@/lib/hotel-times'
+import { VAT_PERCENT_INPUT_STEP } from '@/lib/booking-totals'
 import {
   Settings, Save, Hotel, UtensilsCrossed, Wrench, RefreshCw
 } from 'lucide-react'
@@ -21,6 +24,8 @@ interface SettingItem {
   key: string
   value: string
 }
+
+const DISPLAY_GROUP_ORDER = ['hotel', 'restaurant', 'general', 'billing', 'payment']
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
@@ -43,11 +48,18 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+      queryClient.invalidateQueries({ queryKey: ['billing-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['restaurant-settings'] })
+      queryClient.invalidateQueries({ queryKey: ['hotel-settings'] })
       setEditedValues({})
-      toast({ title: 'Settings Saved', description: 'All changes have been saved successfully' })
+      toast({ title: 'Settings Saved', description: 'Hotel and restaurant settings are now active across the system.' })
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to save settings', variant: 'destructive' })
+    onError: (err: unknown) => {
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: string }).message)
+          : 'Failed to save settings'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
     },
   })
 
@@ -79,8 +91,34 @@ export default function SettingsPage() {
     payment: 'Payment Settings',
   }
 
+  const groupDescriptions: Record<string, string> = {
+    hotel: 'Check-in/out times, room VAT, late checkout fee, and hotel branding',
+    restaurant: 'Restaurant name and VAT rate for POS orders',
+  }
+
   const handleSave = () => {
-    const updates = Object.entries(editedValues).map(([key, value]) => ({ key, value }))
+    const updates: Array<{ key: string; value: string }> = []
+    const seen = new Set<string>()
+
+    for (const group of sortedGroups) {
+      for (const item of grouped[group] || []) {
+        if (item.key === 'late_checkout_hours') continue
+        const def = getSettingDefinition(item.key)
+        const original =
+          def?.inputType === 'time'
+            ? toTimeInputValue(item.value, def.value)
+            : item.value
+        const current =
+          def?.inputType === 'time'
+            ? toTimeInputValue(getValue(item.key, item.value), def.value)
+            : getValue(item.key, item.value)
+        if (current !== original && !seen.has(item.key)) {
+          seen.add(item.key)
+          updates.push({ key: item.key, value: current })
+        }
+      }
+    }
+
     if (updates.length === 0) {
       toast({ title: 'No Changes', description: 'There are no changes to save' })
       return
@@ -89,29 +127,47 @@ export default function SettingsPage() {
   }
 
   const getValue = (key: string, originalValue: string) => {
-    return editedValues[key] !== undefined ? editedValues[key] : originalValue
+    if (editedValues[key] !== undefined) return editedValues[key]
+    const def = getSettingDefinition(key)
+    if (def?.inputType === 'time') return toTimeInputValue(originalValue, def.value)
+    return originalValue
   }
 
-  const friendlyLabels: Record<string, string> = {
-    hotel_name: 'Hotel Name',
-    restaurant_name: 'Restaurant Name',
-    vat_percent: 'VAT Percentage (%)',
-    currency: 'Currency',
-    late_checkout_charge: 'Late Checkout Charge (৳)',
-    late_checkout_hours: 'Late Checkout Hour (24h)',
-    service_charge_percent: 'Service Charge (%)',
-    default_discount_percent: 'Default Discount (%)',
+  const setFieldValue = (key: string, value: string) => {
+    const def = getSettingDefinition(key)
+    const normalized =
+      def?.inputType === 'time' ? toTimeInputValue(value, def.value) : value
+    setEditedValues((prev) => ({ ...prev, [key]: normalized }))
   }
+
+  const sortedGroups = [
+    ...DISPLAY_GROUP_ORDER.filter((g) => grouped[g]?.length),
+    ...Object.keys(grouped).filter((g) => !DISPLAY_GROUP_ORDER.includes(g)),
+  ]
+
+  const hasPendingChanges = sortedGroups.some((group) =>
+    (grouped[group] || []).some((item) => {
+      if (item.key === 'late_checkout_hours') return false
+      const def = getSettingDefinition(item.key)
+      const original =
+        def?.inputType === 'time' ? toTimeInputValue(item.value, def.value) : item.value
+      const current =
+        def?.inputType === 'time'
+          ? toTimeInputValue(getValue(item.key, item.value), def.value)
+          : getValue(item.key, item.value)
+      return current !== original
+    })
+  )
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Settings className="h-6 w-6 text-amber-600" />
             System Settings
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Configure system-wide settings</p>
+          <p className="text-muted-foreground text-sm mt-1">Configure hotel and restaurant operations</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -124,7 +180,7 @@ export default function SettingsPage() {
           <Button
             className="bg-amber-600 hover:bg-amber-700 text-white"
             onClick={handleSave}
-            disabled={saveMutation.isPending || Object.keys(editedValues).length === 0}
+            disabled={saveMutation.isPending || !hasPendingChanges}
           >
             <Save className="h-4 w-4 mr-2" />
             {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
@@ -132,7 +188,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {Object.keys(editedValues).length > 0 && (
+      {hasPendingChanges && (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="p-3 flex items-center justify-between">
             <p className="text-sm text-amber-700">
@@ -155,37 +211,75 @@ export default function SettingsPage() {
           ))}
         </div>
       ) : (
-        Object.entries(grouped).map(([group, items]) => (
-          <Card key={group}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                {groupIcons[group] || <Settings className="h-5 w-5 text-slate-600" />}
-                {groupLabels[group] || `${group.charAt(0).toUpperCase() + group.slice(1)} Settings`}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {items.map((item, index) => (
-                <div key={item.id}>
-                  {index > 0 && <Separator className="mb-4" />}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <Label className="sm:w-64 text-sm font-medium text-slate-700">
-                      {friendlyLabels[item.key] || item.key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                    </Label>
-                    <div className="flex-1">
-                      <Input
-                        value={getValue(item.key, item.value)}
-                        onChange={(e) => setEditedValues((prev) => ({ ...prev, [item.key]: e.target.value }))}
-                        className={editedValues[item.key] !== undefined ? 'border-amber-400 ring-1 ring-amber-200' : ''}
-                      />
+        sortedGroups.map((group) => {
+          const items = grouped[group] || []
+          return (
+            <Card key={group}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  {groupIcons[group] || <Settings className="h-5 w-5 text-muted-foreground" />}
+                  {groupLabels[group] || `${group.charAt(0).toUpperCase() + group.slice(1)} Settings`}
+                </CardTitle>
+                {groupDescriptions[group] && (
+                  <p className="text-sm text-muted-foreground font-normal">{groupDescriptions[group]}</p>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {items
+                  .filter((item) => item.key !== 'late_checkout_hours')
+                  .map((item, index) => {
+                  const def = getSettingDefinition(item.key)
+                  const label =
+                    def?.label ||
+                    item.key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+                  const isNumber = def?.inputType === 'number'
+                  const isTime = def?.inputType === 'time'
+                  const isPercent = item.key.includes('percent')
+
+                  return (
+                    <div key={item.id}>
+                      {index > 0 && <Separator className="mb-4" />}
+                      <div className="flex flex-col gap-2">
+                        <Label className="text-sm font-medium text-foreground">{label}</Label>
+                        {def?.hint && (
+                          <p className="text-xs text-muted-foreground -mt-1">{def.hint}</p>
+                        )}
+                        <Input
+                          type={isTime ? 'time' : isNumber ? 'number' : 'text'}
+                          min={isNumber ? 0 : undefined}
+                          max={isPercent ? 100 : undefined}
+                          step={isPercent ? String(VAT_PERCENT_INPUT_STEP) : '1'}
+                          value={
+                            isTime
+                              ? toTimeInputValue(getValue(item.key, item.value), def?.value)
+                              : getValue(item.key, item.value)
+                          }
+                          onChange={(e) => setFieldValue(item.key, e.target.value)}
+                          onInput={(e) => setFieldValue(item.key, e.currentTarget.value)}
+                          className={(() => {
+                            const original = isTime
+                              ? toTimeInputValue(item.value, def?.value)
+                              : item.value
+                            const current = isTime
+                              ? toTimeInputValue(getValue(item.key, item.value), def?.value)
+                              : getValue(item.key, item.value)
+                            return current !== original
+                              ? 'border-amber-400 ring-1 ring-amber-200'
+                              : isTime
+                                ? 'max-w-[10rem]'
+                                : ''
+                          })()}
+                        />
+                      </div>
                     </div>
-                    <span className="text-xs text-slate-400 font-mono sm:w-32 shrink-0">{item.key}</span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))
+                  )
+                })}
+              </CardContent>
+            </Card>
+          )
+        })
       )}
     </div>
   )
 }
+

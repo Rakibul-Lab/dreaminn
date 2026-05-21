@@ -70,6 +70,7 @@ const paymentTypeColors: Record<string, string> = {
   FINAL: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   PARTIAL: 'bg-orange-50 text-orange-700 border-orange-200',
   RESTAURANT: 'bg-purple-50 text-purple-700 border-purple-200',
+  REFUND: 'bg-red-50 text-red-700 border-red-200',
 }
 
 export default function PaymentsPage() {
@@ -175,11 +176,11 @@ export default function PaymentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <CreditCard className="h-6 w-6 text-amber-600" />
             Payments
           </h2>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             {isHotel ? 'Hotel payments' : isRestaurant ? 'Restaurant payments' : 'All payment records'}
           </p>
         </div>
@@ -200,8 +201,8 @@ export default function PaymentsPage() {
               <Wallet className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Today</p>
-              <p className="text-xl font-bold text-slate-800">৳{todayTotal.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">Today</p>
+              <p className="text-xl font-bold text-foreground">৳{todayTotal.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -211,8 +212,8 @@ export default function PaymentsPage() {
               <Calendar className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">This Week</p>
-              <p className="text-xl font-bold text-slate-800">৳{weekTotal.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">This Week</p>
+              <p className="text-xl font-bold text-foreground">৳{weekTotal.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -222,8 +223,8 @@ export default function PaymentsPage() {
               <TrendingUp className="h-5 w-5 text-sky-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">This Month</p>
-              <p className="text-xl font-bold text-slate-800">৳{monthTotal.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">This Month</p>
+              <p className="text-xl font-bold text-foreground">৳{monthTotal.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -235,7 +236,7 @@ export default function PaymentsPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <Select value={paymentTypeFilter} onValueChange={setPaymentTypeFilter}>
               <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2 text-slate-400" />
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Payment type" />
               </SelectTrigger>
               <SelectContent>
@@ -296,13 +297,13 @@ export default function PaymentsPage() {
                   ))
                 ) : payments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No payments found
                     </TableCell>
                   </TableRow>
                 ) : (
                   payments.map((payment) => (
-                    <TableRow key={payment.id} className="hover:bg-slate-50">
+                    <TableRow key={payment.id} className="hover:bg-muted">
                       <TableCell className="text-sm">
                         {format(new Date(payment.createdAt), 'MMM dd, yyyy HH:mm')}
                       </TableCell>
@@ -322,7 +323,7 @@ export default function PaymentsPage() {
                         ) : payment.order ? (
                           <span>{payment.order.orderNumber} ({payment.order.orderType})</span>
                         ) : (
-                          <span className="text-slate-400">-</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
                       <TableCell className="text-sm">{payment.receiver?.name || 'N/A'}</TableCell>
@@ -341,7 +342,7 @@ export default function PaymentsPage() {
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
             Previous
           </Button>
-          <span className="flex items-center px-3 text-sm text-slate-600">Page {page} of {totalPages}</span>
+          <span className="flex items-center px-3 text-sm text-muted-foreground">Page {page} of {totalPages}</span>
           <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
             Next
           </Button>

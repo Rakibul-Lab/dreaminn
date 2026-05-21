@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { successResponse, errorResponse, notFoundResponse, logActivity } from '@/lib/api-utils';
+import { findCustomerByPhone } from '@/lib/customer-phone';
+import { isValidPhone, normalizePhone, phonesMatch } from '@/lib/phone';
 import { RoleType } from '@prisma/client';
 
 export async function GET(
@@ -50,23 +52,27 @@ export async function PUT(
       return notFoundResponse('Customer');
     }
 
-    // If phone is being changed, check for duplicates
-    if (body.phone && body.phone !== existing.phone) {
-      const duplicate = await db.customer.findFirst({
-        where: { phone: body.phone, NOT: { id } },
-      });
-      if (duplicate) {
-        return errorResponse('Customer with this phone number already exists');
+    if (body.phone !== undefined) {
+      if (!isValidPhone(body.phone)) {
+        return errorResponse('Please enter a valid phone number (at least 10 digits)');
+      }
+      if (!phonesMatch(body.phone, existing.phone)) {
+        const duplicate = await findCustomerByPhone(body.phone);
+        if (duplicate && duplicate.id !== id) {
+          return errorResponse('Customer with this phone number already exists');
+        }
       }
     }
 
     const updateData: Record<string, unknown> = {};
     if (body.name !== undefined) updateData.name = body.name;
+    if (body.company !== undefined) updateData.company = body.company?.trim() || null;
     if (body.email !== undefined) updateData.email = body.email;
-    if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.phone !== undefined) updateData.phone = normalizePhone(body.phone);
     if (body.address !== undefined) updateData.address = body.address;
     if (body.idType !== undefined) updateData.idType = body.idType;
     if (body.idNumber !== undefined) updateData.idNumber = body.idNumber;
+    if (body.dateOfBirth !== undefined) updateData.dateOfBirth = body.dateOfBirth;
     if (body.idDocPath !== undefined) updateData.idDocPath = body.idDocPath;
     if (body.notes !== undefined) updateData.notes = body.notes;
 

@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { successResponse, paginatedResponse, errorResponse, logActivity } from '@/lib/api-utils';
-import { RoleType } from '@prisma/client';
+import { Prisma, RoleType } from '@prisma/client';
+import { resolveBookingCheckInOut } from '@/lib/app-settings';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,13 +13,40 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const floor = searchParams.get('floor');
     const typeId = searchParams.get('typeId');
+    const forBooking = searchParams.get('forBooking') === 'true';
+    const checkIn = searchParams.get('checkIn');
+    const checkOut = searchParams.get('checkOut');
 
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    const where: Prisma.RoomWhereInput = {};
+    if (forBooking) {
+      where.status = 'AVAILABLE';
+    } else if (status) {
+      where.status = status as Prisma.EnumRoomStatusFilter['equals'];
+    }
     if (floor) where.floor = parseInt(floor);
     if (typeId) where.typeId = typeId;
+
+    if (checkIn && checkOut) {
+      try {
+        const { checkIn: checkInDate, checkOut: checkOutDate } = await resolveBookingCheckInOut(
+          checkIn,
+          checkOut
+        );
+        where.NOT = {
+          bookings: {
+            some: {
+              status: { in: ['RESERVED', 'CHECKED_IN'] },
+              checkIn: { lt: checkOutDate },
+              checkOut: { gt: checkInDate },
+            },
+          },
+        };
+      } catch {
+        // Invalid date range — skip availability filter
+      }
+    }
 
     const [rooms, total] = await Promise.all([
       db.room.findMany({

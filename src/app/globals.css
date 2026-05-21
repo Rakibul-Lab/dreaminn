@@ -6,7 +6,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), var(--font-bengali), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -112,12 +112,124 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Dark mode: remap legacy hardcoded Tailwind utilities (skip print-container; keep bg-slate-900) */
+.dark :is(.bg-white, .bg-white\/80, .bg-white\/90):not(.print-container):not(:is(.print-container *)) {
+  background-color: var(--card) !important;
+}
+.dark :is(.bg-slate-50, .bg-slate-50\/70, .bg-slate-50\/60, .bg-slate-100, .bg-slate-200):not(.print-container):not(:is(.print-container *)) {
+  background-color: var(--muted) !important;
+}
+.dark :is(.text-slate-900, .text-slate-800, .text-slate-700):not(.print-container):not(:is(.print-container *)) {
+  color: var(--foreground) !important;
+}
+.dark :is(.text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300):not(.print-container):not(:is(.print-container *)) {
+  color: var(--muted-foreground) !important;
+}
+.dark :is(.border-slate-200, .border-slate-100, .border-slate-300):not(.print-container):not(:is(.print-container *)) {
+  border-color: var(--border) !important;
+}
+.dark :is(.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover):not(.print-container):not(:is(.print-container *)) {
+  background-color: var(--muted) !important;
+}
+.dark .bg-amber-50:not(.print-container):not(:is(.print-container *)),
+.dark .bg-amber-50\/40:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.28 0.06 75 / 0.55) !important;
+}
+.dark .bg-emerald-50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.05 160) !important;
+}
+.dark .bg-red-50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.06 25) !important;
+}
+.dark .bg-blue-50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.05 250) !important;
+}
+.dark .bg-green-50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.05 145) !important;
+}
+.dark :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.82 0.12 75) !important;
+}
+.dark .text-amber-900:not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.88 0.1 75) !important;
+}
+.dark :is(.text-black, .hover\:text-black:hover):not(.print-container):not(:is(.print-container *)) {
+  color: var(--foreground) !important;
+}
+.dark :is(.bg-slate-900, .bg-slate-800) .text-muted-foreground:not(.print-container):not(:is(.print-container *)),
+.dark :is(.from-slate-900, .to-slate-800) .text-muted-foreground:not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.75 0 0) !important;
+}
+.dark :is(.from-amber-50, .via-orange-50, .to-emerald-50):not(.print-container):not(:is(.print-container *)) {
+  --tw-gradient-from: oklch(0.24 0.04 75) !important;
+  --tw-gradient-to: oklch(0.24 0.04 160) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.dark .bg-gradient-to-r.from-amber-50.to-emerald-50:not(.print-container):not(:is(.print-container *)) {
+  background-image: linear-gradient(to right, oklch(0.24 0.04 75 / 0.65), oklch(0.24 0.04 160 / 0.65)) !important;
+}
+.dark .bg-gradient-to-br.from-amber-50.via-orange-50.to-emerald-50:not(.print-container):not(:is(.print-container *)) {
+  background-image: linear-gradient(to bottom right, oklch(0.22 0.04 75), oklch(0.22 0.04 55), oklch(0.22 0.04 160)) !important;
+}
+.dark .bg-slate-100:not(.print-container):not(:is(.print-container *)) {
+  background-color: var(--background) !important;
+}
+.dark :is(.text-emerald-700, .text-emerald-800, .text-emerald-900):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.1 160) !important;
+}
+.dark :is(.text-red-700, .text-red-800, .text-red-900):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.12 25) !important;
+}
+.dark :is(.text-blue-700, .text-blue-800, .text-blue-900):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.1 250) !important;
+}
+.dark :is(.text-green-700, .text-green-800, .text-green-900):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.1 145) !important;
+}
+.dark .bg-sky-50:not(.print-container):not(:is(.print-container *)),
+.dark .bg-sky-50\/50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.05 240 / 0.55) !important;
+}
+.dark .bg-orange-50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.28 0.06 45 / 0.55) !important;
+}
+.dark :is(.text-sky-700, .text-sky-800):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.1 240) !important;
+}
+.dark :is(.text-orange-700, .text-orange-800):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.8 0.12 45) !important;
+}
+.dark :is(.border-emerald-200, .border-red-200, .border-amber-200, .border-sky-200):not(.print-container):not(:is(.print-container *)) {
+  border-color: oklch(0.45 0.06 0 / 0.45) !important;
+}
+.dark .border-amber-400:not(.print-container):not(:is(.print-container *)) {
+  border-color: oklch(0.65 0.12 75) !important;
+}
+.dark .bg-amber-50\/50:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.28 0.06 75 / 0.45) !important;
+}
+.dark :is(.text-red-600, .text-red-700):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.14 25) !important;
+}
+.dark :is(.text-emerald-600, .text-emerald-700):not(.print-container):not(:is(.print-container *)) {
+  color: oklch(0.78 0.12 160) !important;
+}
+.dark .border-emerald-600:not(.print-container):not(:is(.print-container *)) {
+  border-color: oklch(0.55 0.12 160) !important;
+}
+.dark .hover\:border-amber-200:hover:not(.print-container):not(:is(.print-container *)) {
+  border-color: oklch(0.55 0.1 75) !important;
+}
+.dark .hover\:bg-emerald-50:hover:not(.print-container):not(:is(.print-container *)) {
+  background-color: oklch(0.26 0.05 160) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
@@ -140,29 +252,134 @@
   background: oklch(0.65 0 0);
 }
 
-/* Print styles */
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.45 0 0);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0 0);
+}
+
+/* Reservations list: sticky header (collapse breaks sticky in Chrome/Safari) */
+.bookings-sticky-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.bookings-sticky-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: var(--muted);
+  box-shadow:
+    0 1px 0 var(--border),
+    0 4px 6px -2px rgb(0 0 0 / 0.08);
+}
+
+/* Print — show only .print-container content */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   body {
     background: white !important;
   }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-container {
+    visibility: visible !important;
+  }
+
+  .print-container * {
+    visibility: visible !important;
+  }
+
+  .print-container {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+  }
+
   .print\:hidden {
     display: none !important;
+    visibility: hidden !important;
   }
+
   aside,
-  header,
-  footer {
+  nav,
+  footer:not(.rd-document-footer) {
     display: none !important;
   }
-  main {
-    margin: 0 !important;
+
+  .print-container:has(.reservation-a4-sheet) {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+  }
+
+  .reservation-a4-sheet {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 12mm 14mm 16mm !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  .reservation-a4-sheet .rd-document-footer {
+    margin-top: auto !important;
+    padding-top: 10mm !important;
+  }
+
+  .rd-document-footer {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .rd-document-footer * {
+    visibility: visible !important;
+  }
+
+  /* Invoice print page */
+  .invoice-print-page {
+    width: 100% !important;
+    max-width: 210mm !important;
+    min-height: auto !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    background: white !important;
   }
-  .print-container {
-    padding: 20px;
+
+  .invoice-print-page table {
+    width: 100% !important;
+    border-collapse: collapse !important;
   }
+
+  .invoice-print-page th,
+  .invoice-print-page td {
+    color: #1a1a1a !important;
+  }
+
   .shadow-xl,
   .shadow-sm,
-  .shadow {
+  .shadow,
+  .shadow-md {
     box-shadow: none !important;
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth, canAccessHotel, canAccessRestaurant } from '@/lib/auth';
 import { successResponse, errorResponse, paginatedResponse, logActivity } from '@/lib/api-utils';
+import { bookingVatOptions, computeRoomBookingTotals, sumBookingNetPaid } from '@/lib/booking-totals';
 import { PaymentType, PaymentMethod } from '@prisma/client';
 
 // GET /api/payments - List payments with filters
@@ -178,14 +179,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update booking dueAmount for hotel payments
+    // Update booking dueAmount (VAT-inclusive room total minus all payments)
     if (bookingId) {
       const booking = await db.booking.findUnique({ where: { id: bookingId } });
       if (booking) {
-        const newDueAmount = Math.max(0, booking.dueAmount - amount);
+        const paymentRows = await db.payment.findMany({
+          where: { bookingId },
+          select: { amount: true, paymentType: true },
+        });
+        const totalPaid = sumBookingNetPaid(paymentRows);
+        const { dueAmount } = computeRoomBookingTotals(
+          booking.totalRoomCharge,
+          totalPaid,
+          bookingVatOptions(booking)
+        );
         await db.booking.update({
           where: { id: bookingId },
-          data: { dueAmount: newDueAmount },
+          data: { dueAmount },
         });
       }
     }

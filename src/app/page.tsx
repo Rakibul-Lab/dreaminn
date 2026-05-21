@@ -4,12 +4,14 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore, canAccessHotel, canAccessRestaurant, canAccessAdmin } from '@/lib/auth-store'
+import { CURRENT_PAGE_STORAGE_KEY } from '@/lib/session'
+import { useAuthHydration } from '@/hooks/use-auth-hydration'
 import { api } from '@/lib/api-client'
 import {
   LayoutDashboard, FileText, CreditCard, BarChart3, Users, Settings,
   ScrollText, Package, LogOut, Hotel, UtensilsCrossed, Menu, X,
   Bed, CalendarCheck, UserCircle, SprayCan, ShoppingCart,
-  ChefHat, Grid3X3, ClipboardList, DoorOpen, Tag, Bell
+  ChefHat, Grid3X3, ClipboardList, DoorOpen, Tag, Bell, Loader2, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,9 +22,13 @@ import { Separator } from '@/components/ui/separator'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { AppDevelopedByFooter } from '@/components/AppDevelopedByFooter'
 
 // Page components - Hotel (named exports)
 import { Dashboard as HotelDashboard } from '@/components/erp/hotel/Dashboard'
@@ -44,12 +50,14 @@ import SettingsPage from '@/components/erp/admin/SettingsPage'
 import UsersPage from '@/components/erp/admin/UsersPage'
 import ActivityLogsPage from '@/components/erp/admin/ActivityLogsPage'
 import InventoryPage from '@/components/erp/admin/InventoryPage'
+import { ProfilePage } from '@/components/erp/auth/ProfilePage'
 
 type PageKey = 
   | 'hotel-dashboard' | 'rooms' | 'room-types' | 'bookings' | 'customers' | 'housekeeping'
   | 'pos' | 'menu' | 'orders' | 'kitchen' | 'tables'
   | 'invoices' | 'payments' | 'reports'
   | 'admin-dashboard' | 'users' | 'settings' | 'logs' | 'inventory'
+  | 'profile'
 
 interface NavItem {
   key: PageKey
@@ -73,7 +81,7 @@ const navItems: NavItem[] = [
   { key: 'hotel-dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
   { key: 'rooms', label: 'Rooms', icon: <Bed className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
   { key: 'room-types', label: 'Room Types', icon: <Tag className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'bookings', label: 'Bookings', icon: <CalendarCheck className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
+  { key: 'bookings', label: 'Reservations', icon: <CalendarCheck className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
   { key: 'customers', label: 'Guests', icon: <UserCircle className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
   { key: 'housekeeping', label: 'Housekeeping', icon: <SprayCan className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
   // Restaurant - CloudView
@@ -94,9 +102,18 @@ const navItems: NavItem[] = [
   { key: 'inventory', label: 'Inventory', icon: <Package className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
   { key: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
   { key: 'logs', label: 'Activity Logs', icon: <ScrollText className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
+  // Account
+  { key: 'profile', label: 'My Profile', icon: <User className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'], group: 'Account' },
 ]
 
-const CURRENT_PAGE_STORAGE_KEY = 'erp-current-page'
+function readSavedPageKey(): PageKey {
+  if (typeof window === 'undefined') return 'hotel-dashboard'
+  const saved = window.localStorage.getItem(CURRENT_PAGE_STORAGE_KEY)
+  if (saved && navItems.some((item) => item.key === saved)) {
+    return saved as PageKey
+  }
+  return 'hotel-dashboard'
+}
 
 function LoginForm() {
   const { login } = useAuthStore()
@@ -110,9 +127,20 @@ function LoginForm() {
     e.preventDefault()
     setLoading(true)
     try {
-      const res = await api.post<{ success: boolean; data: { user: { id: string; email: string; name: string; avatar?: string | null; role: string }; token: string } }>('/auth/login', { email, password })
+      const res = await api.post<{ success: boolean; data: { user: { id: string; email: string; name: string; avatar?: string | null; phone?: string | null; role: string }; token: string } }>('/auth/login', { email, password })
       if (res.success && res.data) {
-        login(res.data.user as any, res.data.token)
+        const u = res.data.user
+        login(
+          {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            avatar: u.avatar ?? null,
+            phone: u.phone ?? null,
+            role: u.role as 'ADMIN' | 'HOTEL_STAFF' | 'RESTAURANT_STAFF',
+          },
+          res.data.token
+        )
         toast({ title: 'Welcome!', description: `Logged in as ${res.data.user.name}` })
       } else {
         toast({ title: 'Login Failed', description: (res as any).error || 'Invalid credentials', variant: 'destructive' })
@@ -146,27 +174,27 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-4">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-amber-50 via-white to-emerald-50">
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {/* Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4 border border-slate-200 overflow-hidden">
-            <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={64} height={64} className="h-full w-full object-cover" />
-          </div>
-          <h1 className="text-3xl font-bold text-slate-800">ERP System</h1>
-          <div className="flex items-center justify-center gap-3 mt-2">
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-              <Hotel className="h-3 w-3 mr-1" /> RRP Dream Inn
-            </Badge>
-            <span className="text-slate-300">+</span>
-            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-              <UtensilsCrossed className="h-3 w-3 mr-1" /> CloudView
-            </Badge>
-          </div>
-        </div>
-
         <Card className="shadow-xl border-0">
           <CardContent className="p-6">
+            <div className="text-center mb-6 pb-6 border-b border-border">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4 border border-slate-200 overflow-hidden">
+                <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={64} height={64} className="h-full w-full object-cover" />
+              </div>
+              <h1 className="text-3xl font-bold text-slate-800">ERP System</h1>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+                  <Hotel className="h-3 w-3 mr-1" /> RRP Dream Inn
+                </Badge>
+                <span className="text-slate-300">+</span>
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                  <UtensilsCrossed className="h-3 w-3 mr-1" /> CloudView
+                </Badge>
+              </div>
+            </div>
+
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -241,7 +269,7 @@ function LoginForm() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-emerald-800">Hotel Staff</p>
-                    <p className="text-xs text-emerald-500">Rooms, bookings, billing</p>
+                    <p className="text-xs text-emerald-500">Rooms, reservations, billing</p>
                   </div>
                 </button>
                 <button
@@ -262,6 +290,8 @@ function LoginForm() {
           </CardContent>
         </Card>
       </div>
+      </div>
+      <AppDevelopedByFooter showProductLine />
     </div>
   )
 }
@@ -277,7 +307,7 @@ const pageTitles: Record<PageKey, string> = {
   'hotel-dashboard': 'Hotel Dashboard',
   'rooms': 'Room Management',
   'room-types': 'Room Types',
-  'bookings': 'Bookings & Reservations',
+  'bookings': 'Reservations',
   'customers': 'Guest Management',
   'housekeeping': 'Housekeeping',
   'pos': 'POS Terminal',
@@ -293,12 +323,13 @@ const pageTitles: Record<PageKey, string> = {
   'settings': 'System Settings',
   'logs': 'Activity Logs',
   'inventory': 'Inventory Management',
+  'profile': 'My Profile',
 }
 
 function ERPApp() {
   const { user, logout } = useAuthStore()
   const queryClient = useQueryClient()
-  const [currentPage, setCurrentPage] = useState<PageKey>('hotel-dashboard')
+  const [currentPage, setCurrentPage] = useState<PageKey>(readSavedPageKey)
   const [pageRefreshNonce, setPageRefreshNonce] = useState(0)
   const [headerLoading, setHeaderLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -397,20 +428,32 @@ function ERPApp() {
       case 'settings': return <SettingsPage />
       case 'logs': return <ActivityLogsPage />
       case 'inventory': return <InventoryPage />
+      case 'profile': return <ProfilePage />
       default: return <HotelDashboard onNavigate={handlePageNavigation} />
     }
   }, [currentPage, handlePageNavigation])
 
   const { data: notifRes } = useQuery({
     queryKey: ['header-notifications'],
-    queryFn: () =>
-      api.get<{ success: boolean; data: AppNotification[]; meta?: { total: number } }>(
-        '/notifications?limit=10'
-      ),
-    refetchInterval: 2000,
+    queryFn: async () => {
+      try {
+        const res = await api.get<{
+          success: boolean
+          data: AppNotification[]
+          meta?: { total: number; unreadCount?: number }
+        }>('/notifications?limit=10')
+        if (res?.success) return res
+      } catch {
+        // ignore — dev server may still be compiling routes
+      }
+      return { success: true, data: [] as AppNotification[], meta: { total: 0, unreadCount: 0 } }
+    },
+    refetchInterval: 30_000,
+    retry: 1,
   })
   const notifications = notifRes?.data || []
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount =
+    notifRes?.meta?.unreadCount ?? notifications.filter((n) => !n.read).length
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.put('/notifications', { markAll: true }),
@@ -429,22 +472,24 @@ function ERPApp() {
   const groupColors: Record<string, string> = {
     'RRP Dream Inn': 'text-emerald-600',
     'CloudView': 'text-amber-600',
-    'Billing': 'text-slate-600',
-    'Analytics': 'text-slate-600',
+    'Billing': 'text-muted-foreground',
+    'Analytics': 'text-muted-foreground',
     'System': 'text-red-600',
+    'Account': 'text-muted-foreground',
   }
 
   const groupBgColors: Record<string, string> = {
     'RRP Dream Inn': 'bg-emerald-50',
     'CloudView': 'bg-amber-50',
-    'Billing': 'bg-slate-50',
-    'Analytics': 'bg-slate-50',
+    'Billing': 'bg-muted',
+    'Analytics': 'bg-muted',
     'System': 'bg-red-50',
+    'Account': 'bg-muted',
   }
 
   const renderNavItems = (items: NavItem[], group: string) => (
     <div key={group} className="mb-3">
-      <p className={`text-[10px] font-bold uppercase tracking-widest px-3 mb-1.5 ${groupColors[group] || 'text-slate-400'}`}>
+      <p className={`text-[10px] font-bold uppercase tracking-widest px-3 mb-1.5 ${groupColors[group] || 'text-muted-foreground'}`}>
         {group}
       </p>
       {items.map((item) => (
@@ -454,7 +499,7 @@ function ERPApp() {
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
             currentPage === item.key
               ? `${groupBgColors[group] || 'bg-amber-50'} font-semibold ${groupColors[group] || 'text-amber-700'}`
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           }`}
         >
           {item.icon}
@@ -465,7 +510,7 @@ function ERPApp() {
   )
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-background">
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[70] h-1 overflow-hidden">
         <div
           className={`h-full bg-gradient-to-r from-amber-500 via-emerald-500 to-amber-500 shadow-[0_0_10px_rgba(16,185,129,0.55)] transition-all duration-500 ease-out ${
@@ -475,14 +520,14 @@ function ERPApp() {
       </div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-white border-r border-slate-200 shadow-sm fixed inset-y-0 left-0 z-30">
-        <div className="p-4 border-b border-slate-100">
+      <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-card border-r border-border shadow-sm fixed inset-y-0 left-0 z-30">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="h-9 w-9 rounded-xl bg-background border border-border shadow-sm overflow-hidden">
               <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={36} height={36} className="h-full w-full object-cover" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-800 text-sm leading-tight">RRP Dream Inn</h1>
+              <h1 className="font-bold text-foreground text-sm leading-tight">RRP Dream Inn</h1>
               <p className="text-[11px] text-amber-600 font-medium">+ CloudView Restaurant</p>
             </div>
           </div>
@@ -492,27 +537,15 @@ function ERPApp() {
           {Object.entries(groupedNav).map(([group, items]) => renderNavItems(items, group))}
         </nav>
 
-        <div className="p-3 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-sm font-bold text-slate-600 shadow-sm overflow-hidden">
-              {user?.avatar ? (
-                <img src={user.avatar} alt={user.name || 'User avatar'} className="h-full w-full object-cover" />
-              ) : (
-                <span>{user?.name?.charAt(0) || 'U'}</span>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-700 truncate">{user?.name}</p>
-              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${roleBadgeColors[user?.role || ''] || ''}`}>
-                {user?.role === 'HOTEL_STAFF' && <Hotel className="h-2.5 w-2.5 mr-0.5" />}
-                {user?.role === 'RESTAURANT_STAFF' && <UtensilsCrossed className="h-2.5 w-2.5 mr-0.5" />}
-                {user?.role?.replace('_', ' ')}
-              </Badge>
-            </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout" className="h-8 w-8">
-              <LogOut className="h-4 w-4 text-slate-400" />
-            </Button>
-          </div>
+        <div className="p-3 border-t border-border bg-muted/50">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </aside>
 
@@ -520,13 +553,13 @@ function ERPApp() {
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <aside className="fixed inset-y-0 left-0 w-72 bg-white shadow-2xl z-50 animate-in slide-in-from-left duration-200">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+          <aside className="fixed inset-y-0 left-0 w-72 bg-card shadow-2xl z-50 animate-in slide-in-from-left duration-200">
+            <div className="p-4 border-b border-border flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-lg bg-white border border-slate-200 overflow-hidden">
+                <div className="h-7 w-7 rounded-lg bg-card border border-border overflow-hidden">
                   <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={28} height={28} className="h-full w-full object-cover" />
                 </div>
-                <span className="font-bold text-slate-800 text-sm">ERP System</span>
+                <span className="font-bold text-foreground text-sm">ERP System</span>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="h-8 w-8">
                 <X className="h-4 w-4" />
@@ -535,23 +568,18 @@ function ERPApp() {
             <nav className="p-2.5 space-y-0.5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
               {Object.entries(groupedNav).map(([group, items]) => renderNavItems(items, group))}
             </nav>
-            <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-100 bg-white">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 overflow-hidden">
-                  {user?.avatar ? (
-                    <img src={user.avatar} alt={user.name || 'User avatar'} className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{user?.name?.charAt(0) || 'U'}</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-700">{user?.name}</p>
-                  <p className="text-xs text-slate-400">{user?.role?.replace('_', ' ')}</p>
-                </div>
-                <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
-                  <LogOut className="h-4 w-4 text-slate-400" />
-                </Button>
-              </div>
+            <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-border bg-card">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSidebarOpen(false)
+                  handleLogout()
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
             </div>
           </aside>
         </div>
@@ -560,29 +588,48 @@ function ERPApp() {
       {/* Main Content */}
       <main className="flex-1 lg:ml-60 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="h-5 w-5" />
             </Button>
             <div>
-              <h2 className="text-lg font-semibold text-slate-800">
+              <h2 className="text-lg font-semibold text-foreground">
                 {pageTitles[currentPage] || currentPage}
               </h2>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center rounded-md border bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
-              {now.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              })}
+            <div className="flex flex-row flex-wrap items-center justify-end gap-2">
+              <div className="rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground sm:text-xs">
+                {now.toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: '2-digit',
+                  year: 'numeric',
+                })}
+              </div>
+              <div className="rounded-md border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-muted-foreground sm:text-xs">
+                <span className="sm:hidden">
+                  {now.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+                <span className="hidden sm:inline">
+                  {now.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </span>
+              </div>
             </div>
+            <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative h-9 w-9">
-                  <Bell className="h-4 w-4 text-slate-500" />
+                  <Bell className="h-4 w-4 text-muted-foreground" />
                   {unreadCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-red-500 text-[10px] font-semibold text-white flex items-center justify-center">
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -591,59 +638,90 @@ function ERPApp() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[340px] p-0">
-                <div className="px-3 py-2 border-b bg-slate-50/70">
+                <div className="px-3 py-2 border-b bg-muted/70">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800">Notifications</p>
+                    <p className="text-sm font-semibold text-foreground">Notifications</p>
                     <button
                       type="button"
                       onClick={() => markAllReadMutation.mutate()}
                       disabled={markAllReadMutation.isPending || unreadCount === 0}
-                      className="text-xs text-amber-700 hover:text-amber-800 disabled:text-slate-300"
+                      className="text-xs text-amber-700 hover:text-amber-800 disabled:text-muted-foreground"
                     >
                       Mark all read
                     </button>
                   </div>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-muted-foreground">
                     {unreadCount} unread
                   </p>
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-xs text-slate-400">
+                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                       No notifications yet
                     </div>
                   ) : (
                     notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={`px-3 py-2 border-b last:border-b-0 ${n.read ? 'bg-white' : 'bg-amber-50/40'}`}
+                        className={`px-3 py-2 border-b last:border-b-0 ${n.read ? 'bg-card' : 'bg-amber-50/40 dark:bg-amber-950/40'}`}
                       >
-                        <p className="text-sm font-medium text-slate-800">{n.title}</p>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-sm font-medium text-foreground">{n.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">
                           {new Date(n.createdAt).toLocaleString()}
                         </p>
                       </div>
                     ))
                   )}
                 </div>
-                <div className="px-3 py-2 border-t bg-slate-50/60">
+                <div className="px-3 py-2 border-t bg-muted/60">
                   <button
                     type="button"
                     onClick={() => handlePageNavigation('orders')}
-                    className="text-xs text-slate-600 hover:text-slate-800"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     Go to orders
                   </button>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Badge variant="outline" className={`hidden sm:flex text-xs items-center gap-1 ${roleBadgeColors[user?.role || ''] || ''}`}>
-              {user?.role === 'ADMIN' && <LayoutDashboard className="h-3 w-3" />}
-              {user?.role === 'HOTEL_STAFF' && <Hotel className="h-3 w-3" />}
-              {user?.role === 'RESTAURANT_STAFF' && <UtensilsCrossed className="h-3 w-3" />}
-              {user?.role?.replace('_', ' ')}
-            </Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-9 gap-2 px-2">
+                  <div className="h-8 w-8 rounded-full border border-border bg-muted overflow-hidden flex items-center justify-center text-sm font-bold text-muted-foreground shrink-0">
+                    {user?.avatar ? (
+                      <img src={user.avatar} alt={user.name || 'User'} className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{user?.name?.charAt(0) || 'U'}</span>
+                    )}
+                  </div>
+                  <span className="hidden md:inline text-sm font-medium text-foreground max-w-[120px] truncate">
+                    {user?.name}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-3 py-2 border-b">
+                  <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                  <Badge variant="outline" className={`mt-1.5 text-[10px] px-1.5 py-0 ${roleBadgeColors[user?.role || ''] || ''}`}>
+                    {user?.role?.replace('_', ' ')}
+                  </Badge>
+                </div>
+                <DropdownMenuItem onClick={() => handlePageNavigation('profile')}>
+                  <User className="h-4 w-4 mr-2" />
+                  My Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
@@ -652,19 +730,24 @@ function ERPApp() {
           {renderPage()}
         </div>
 
-        {/* Footer */}
-        <footer className="border-t border-slate-200 bg-white px-4 py-3 text-center">
-          <p className="text-xs text-slate-400">
-            RRP Dream Inn + CloudView Restaurant ERP &copy; {new Date().getFullYear()}
-          </p>
-        </footer>
+        <AppDevelopedByFooter showProductLine />
       </main>
     </div>
   )
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuthStore()
+  const hasHydrated = useAuthHydration()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+
+  if (!hasHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-orange-50 to-emerald-50">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-600" aria-label="Loading application" />
+      </div>
+    )
+  }
+
   if (!isAuthenticated) {
     return <LoginForm />
   }

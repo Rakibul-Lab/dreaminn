@@ -93,7 +93,7 @@ interface InvoiceData {
 }
 
 const statusColors: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
+  DRAFT: 'bg-muted text-foreground border-border',
   ISSUED: 'bg-sky-50 text-sky-700 border-sky-200',
   PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   PARTIALLY_PAID: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -149,6 +149,9 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
   const roomItems = invoice?.items?.filter((i) => i.itemType === 'room_charge') || []
   const foodItems = invoice?.items?.filter((i) => i.itemType === 'food_order') || []
   const extraItems = invoice?.items?.filter((i) => i.itemType === 'extra_service') || []
+  const discountItems = invoice?.items?.filter((i) => i.itemType === 'discount') || []
+  const vatItems =
+    invoice?.items?.filter((i) => i.itemType === 'vat_hotel' || i.itemType === 'vat_restaurant') || []
   const roomBill = invoice?.roomCharges || 0
   const restaurantOrders = invoice?.booking?.restaurantOrders || []
   const restaurantSubtotal = restaurantOrders.reduce((sum, o) => sum + o.subtotal, 0)
@@ -176,7 +179,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
   }
 
   if (!invoice) {
-    return <p className="text-center text-slate-500 p-8">Invoice not found</p>
+    return <p className="text-center text-muted-foreground p-8">Invoice not found</p>
   }
 
   return (
@@ -185,18 +188,18 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 overflow-hidden rounded-lg border bg-white">
+            <div className="h-10 w-10 overflow-hidden rounded-lg border bg-card">
               <Image src="/brand-logo.png" alt="RRP Dream Inn logo" width={40} height={40} className="h-full w-full object-cover" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
                 <Receipt className="h-6 w-6 text-amber-600" />
                 RRP Dream Inn Invoice
               </h2>
             </div>
           </div>
           <p className="font-mono text-lg text-amber-700 mt-1">{invoice.invoiceNumber}</p>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Issued: {invoice.issuedAt ? format(new Date(invoice.issuedAt), 'MMM dd, yyyy HH:mm') : 'N/A'}
           </p>
         </div>
@@ -204,7 +207,11 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
           <Badge variant="outline" className={`text-sm px-3 py-1 ${statusColors[invoice.status] || ''}`}>
             {invoice.status.replace('_', ' ')}
           </Badge>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(`/invoice/${invoice.id}`, '_blank', 'noopener,noreferrer')}
+          >
             <Printer className="h-4 w-4 mr-2" /> Print
           </Button>
           {invoice.dueAmount > 0 && (
@@ -223,23 +230,23 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       <Card className="mb-4">
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2 text-slate-700 font-semibold">
+            <div className="flex items-center gap-2 mb-2 text-foreground font-semibold">
               <Building2 className="h-4 w-4 text-amber-600" />
               RRP Dream Inn
             </div>
-            <p className="text-sm text-slate-500">Hotel & Restaurant</p>
+            <p className="text-sm text-muted-foreground">Hotel & Restaurant</p>
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-2 text-slate-700 font-semibold">
+            <div className="flex items-center gap-2 mb-2 text-foreground font-semibold">
               <User className="h-4 w-4 text-emerald-600" />
               Guest Information
             </div>
             <p className="font-medium">{invoice.booking?.customer?.name}</p>
-            <p className="text-sm text-slate-500 flex items-center gap-1">
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
               <Phone className="h-3 w-3" /> {invoice.booking?.customer?.phone}
             </p>
             {invoice.booking?.customer?.address && (
-              <p className="text-sm text-slate-500 flex items-center gap-1">
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
                 <MapPin className="h-3 w-3" /> {invoice.booking.customer.address}
               </p>
             )}
@@ -251,7 +258,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       {roomItems.length > 0 && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-700">Room Charges</CardTitle>
+            <CardTitle className="text-base text-foreground">Room Charges</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -282,7 +289,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       {foodItems.length > 0 && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-700">Food & Beverage Charges</CardTitle>
+            <CardTitle className="text-base text-foreground">Food & Beverage Charges</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -309,11 +316,42 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
         </Card>
       )}
 
+      {/* Discounts & VAT line items */}
+      {(discountItems.length > 0 || vatItems.length > 0) && (
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-foreground">Discounts & taxes</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[...discountItems, ...vatItems].map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.description}</TableCell>
+                    <TableCell
+                      className={`text-right font-medium ${item.total < 0 ? 'text-emerald-700' : ''}`}
+                    >
+                      {item.total < 0 ? '-' : ''}৳{Math.abs(item.total).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Extra Services */}
       {extraItems.length > 0 && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-700">Extra Services</CardTitle>
+            <CardTitle className="text-base text-foreground">Extra Services</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -344,23 +382,23 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       <Card className="mb-4 border-2 border-amber-200">
         <CardContent className="p-4">
           <div className="space-y-2">
-            <div className="rounded-md border border-slate-200 p-3 space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hotel Part</p>
+            <div className="rounded-md border border-border p-3 space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hotel Part</p>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Room Bill</span>
+                <span className="text-muted-foreground">Room Bill</span>
                 <span>৳{roomBill.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Room VAT</span>
+                <span className="text-muted-foreground">Room VAT</span>
                 <span>৳{roomVat.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-500">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Hotel VAT Rate</span>
                 <span>{hotelVatPercent}%</span>
               </div>
               {extraBill > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600">Extra Charges</span>
+                  <span className="text-muted-foreground">Extra Charges</span>
                   <span>৳{extraBill.toLocaleString()}</span>
                 </div>
               )}
@@ -370,18 +408,18 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
               </div>
             </div>
 
-            <div className="rounded-md border border-slate-200 p-3 space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Restaurant Part</p>
+            <div className="rounded-md border border-border p-3 space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Restaurant Part</p>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Subtotal</span>
+                <span className="text-muted-foreground">Subtotal</span>
                 <span>৳{restaurantSubtotal.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm text-emerald-700">
-                <span className="text-slate-600">Discount</span>
+                <span className="text-muted-foreground">Discount</span>
                 <span>-৳{restaurantDiscount.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">VAT ({restaurantVatLabel})</span>
+                <span className="text-muted-foreground">VAT ({restaurantVatLabel})</span>
                 <span>৳{restaurantVat.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm font-semibold border-t pt-1.5">
@@ -391,7 +429,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
             </div>
 
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Combined Total</span>
+              <span className="text-muted-foreground">Combined Total</span>
               <span>৳{(hotelPartTotal + restaurantPartTotal).toLocaleString()}</span>
             </div>
             {invoice.discount > 0 && (
@@ -425,7 +463,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
       {invoice.payments && invoice.payments.length > 0 && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-700">Payment History</CardTitle>
+            <CardTitle className="text-base text-foreground">Payment History</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -473,7 +511,7 @@ export default function InvoiceDetail({ invoiceId, onClose }: InvoiceDetailProps
                 value={paymentForm.amount}
                 onChange={(e) => setPaymentForm((f) => ({ ...f, amount: e.target.value }))}
               />
-              <p className="text-xs text-slate-500 mt-1">Due: ৳{invoice.dueAmount.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">Due: ৳{invoice.dueAmount.toLocaleString()}</p>
             </div>
             <div>
               <Label>Payment Method</Label>

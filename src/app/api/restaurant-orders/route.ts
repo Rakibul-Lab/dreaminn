@@ -9,6 +9,7 @@ import {
   logActivity,
   generateOrderNumber,
 } from '@/lib/api-utils';
+import { getRestaurantVatPercent } from '@/lib/app-settings';
 import { Prisma, RoleType } from '@prisma/client';
 
 // Helper to filter order data based on user role
@@ -273,8 +274,12 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Calculate VAT and total
-    const vatRate = vatPercent !== undefined ? Number(vatPercent) : 15;
+    // Calculate VAT and total (default from restaurant settings)
+    const defaultRestaurantVat = await getRestaurantVatPercent();
+    const vatRate =
+      vatPercent !== undefined && vatPercent !== null && vatPercent !== ''
+        ? Number(vatPercent)
+        : defaultRestaurantVat;
     const discountAmount = discount !== undefined ? Number(discount) : 0;
     const vatAmount = ((subtotal - discountAmount) * vatRate) / 100;
     const totalAmount = subtotal - discountAmount + vatAmount;
