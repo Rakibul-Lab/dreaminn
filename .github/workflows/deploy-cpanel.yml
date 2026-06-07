@@ -1,0 +1,31 @@
+# Auto-deploy to cPanel when you push to main.
+# Add these GitHub repo secrets (Settings → Secrets → Actions):
+#   CPANEL_SSH_HOST   — e.g. server123.yourhost.com or your domain
+#   CPANEL_SSH_USER   — cPanel SSH username
+#   CPANEL_SSH_KEY    — private SSH key (full PEM contents)
+#   CPANEL_APP_PATH   — e.g. /home/username/dreaminn1
+
+name: Deploy to cPanel
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.CPANEL_SSH_HOST }}
+          username: ${{ secrets.CPANEL_SSH_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          script_stop: true
+          script: |
+            export APP_DIR="${{ secrets.CPANEL_APP_PATH }}"
+            export DEPLOY_BRANCH=main
+            chmod +x "$APP_DIR/scripts/deploy.sh"
+            "$APP_DIR/scripts/deploy.sh"

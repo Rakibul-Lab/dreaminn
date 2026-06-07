@@ -1,0 +1,60 @@
+# Auto-deploy to IntelWebHost / cPanel via FTP when you push to main.
+#
+# GitHub repo → Settings → Secrets → Actions:
+#   FTP_HOST         — rakib07.com (or ftp.rakib07.com)
+#   FTP_USERNAME     — your cPanel username
+#   FTP_PASSWORD     — your cPanel / FTP password
+#   FTP_SERVER_DIR   — remote folder, e.g. /rrpdreaminn/
+#
+# One-time on cPanel:
+#   1. Create folder rrpdreaminn (or use FTP_SERVER_DIR path)
+#   2. Setup Node.js App → startup file: server.js → URL: rakib07.com
+#   3. Add env vars (DATABASE_URL, etc.) in Node.js panel — never upload .env via FTP
+
+name: Deploy to cPanel (FTP)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install & build
+        env:
+          # Build-only placeholders — real secrets live in cPanel Node env vars
+          DATABASE_URL: mysql://build:build@localhost:3306/build
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+          mkdir -p .next/standalone/tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .next/standalone/tmp/restart.txt
+
+      - name: Upload via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          protocol: ftps
+          local-dir: ./.next/standalone/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          exclude: |
+            **/.env
+            **/.env.*
+            **/.git/**
+            **/.github/**
