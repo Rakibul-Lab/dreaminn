@@ -1,11 +1,19 @@
-# Auto-deploy to cPanel when you push to main.
+# Auto-deploy to cPanel over SSH when you push to main (build runs on the server).
+#
+# Enable: GitHub → Settings → Secrets and variables → Variables
+#   DEPLOY_TARGET = ssh
+#
 # Add these GitHub repo secrets (Settings → Secrets → Actions):
 #   CPANEL_SSH_HOST   — e.g. server123.yourhost.com or your domain
 #   CPANEL_SSH_USER   — cPanel SSH username
 #   CPANEL_SSH_KEY    — private SSH key (full PEM contents)
 #   CPANEL_APP_PATH   — e.g. /home/username/dreaminn1
+#
+# One-time on server (SSH):
+#   git clone https://github.com/Rakibul-Lab/rrpdreaminn.git ~/dreaminn1
+#   chmod +x ~/dreaminn1/scripts/deploy.sh
 
-name: Deploy to cPanel
+name: Deploy to cPanel (SSH)
 
 on:
   push:
@@ -13,8 +21,13 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
 jobs:
   deploy:
+    if: ${{ vars.DEPLOY_TARGET == 'ssh' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy over SSH
