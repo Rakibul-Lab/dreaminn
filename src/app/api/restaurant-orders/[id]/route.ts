@@ -63,7 +63,7 @@ export async function GET(
     };
 
     // HOTEL_STAFF and ADMIN can see full customer data via booking relation
-    if (authResult.role === 'ADMIN' || authResult.role === 'HOTEL_STAFF') {
+    if (authResult.role === 'ADMIN' || authResult.role === 'HOTEL_STAFF' || authResult.role === 'HOTEL_FD') {
       include.booking = {
         include: {
           customer: {

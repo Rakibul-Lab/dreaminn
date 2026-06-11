@@ -7,3 +7,8 @@ export function openCompanyLedgerGuestHistoryTab(guestId: string) {
   if (typeof window === 'undefined') return
   window.open(`/company-ledger/guest/${guestId}`, '_blank', 'noopener,noreferrer')
 }
+
+export function openCloudViewRestaurantLedgerTab() {
+  if (typeof window === 'undefined') return
+  window.open('/company-ledger/cloudview', '_blank', 'noopener,noreferrer')
+}

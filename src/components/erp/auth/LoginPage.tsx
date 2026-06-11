@@ -37,7 +37,7 @@ export function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await api.post<{ success: boolean; data?: { user: { id: string; email: string; name: string; avatar?: string | null; role: 'ADMIN' | 'HOTEL_STAFF' | 'RESTAURANT_STAFF' }; token: string }; error?: string }>('/auth/login', { email, password });
+      const res = await api.post<{ success: boolean; data?: { user: { id: string; email: string; name: string; avatar?: string | null; role: 'ADMIN' | 'HOTEL_STAFF' | 'HOTEL_FD' | 'RESTAURANT_STAFF' }; token: string }; error?: string }>('/auth/login', { email, password });
       if (res.success && res.data) {
         login(res.data.user, res.data.token);
         toast.success(`Welcome back, ${res.data.user.name}!`);
@@ -193,8 +193,19 @@ export function LoginPage() {
                 >
                   <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 text-xs font-bold">H</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-emerald-900">Hotel Staff</p>
+                    <p className="text-sm font-medium text-emerald-900">Hotel Manager</p>
                     <p className="text-xs text-emerald-600 truncate">hotel@erp.com / hotel123</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickLogin('fd@erp.com', 'fd123')}
+                  className="flex items-center gap-3 p-2.5 rounded-lg border border-teal-200 bg-teal-50/50 hover:bg-teal-100/70 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 text-xs font-bold">F</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-teal-900">Hotel F.D.</p>
+                    <p className="text-xs text-teal-600 truncate">fd@erp.com / fd123</p>
                   </div>
                 </button>
                 <button

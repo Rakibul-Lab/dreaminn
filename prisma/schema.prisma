@@ -24,6 +24,7 @@ model User {
   payments          Payment[]
   restaurantOrders  RestaurantOrder[]
   hotelDeposits     HotelDeposit[]
+  hotelClearedBills CompanyLedgerBill[] @relation("HotelClearedBills")
 
   @@map("users")
 }
@@ -63,6 +64,8 @@ model Room {
 model CompanyLedger {
   id            String               @id @default(cuid())
   name          String
+  slug          String?              @unique
+  isSystem      Boolean              @default(false) @map("is_system")
   contactPerson String?              @map("contact_person")
   phone         String?
   email         String?
@@ -104,21 +107,31 @@ model CompanyLedgerGuest {
 }
 
 model CompanyLedgerBill {
-  id              String        @id @default(cuid())
-  companyLedgerId String        @map("company_ledger_id")
-  bookingId       String        @unique @map("booking_id")
-  invoiceId       String?       @map("invoice_id")
-  guestName       String        @map("guest_name")
-  roomNumber      String?       @map("room_number")
-  totalAmount     Float         @map("total_amount")
-  paidAmount      Float         @default(0) @map("paid_amount")
-  dueAmount       Float         @map("due_amount")
-  billedAt        DateTime      @default(now()) @map("billed_at")
-  notes           String?
-  companyLedger   CompanyLedger @relation(fields: [companyLedgerId], references: [id], onDelete: Cascade)
-  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  id                String                @id @default(cuid())
+  companyLedgerId   String                @map("company_ledger_id")
+  billType          CompanyLedgerBillType @default(BOOKING) @map("bill_type")
+  settlementStage   LedgerSettlementStage @default(OPEN) @map("settlement_stage")
+  bookingId         String?               @unique @map("booking_id")
+  restaurantOrderId String?               @unique @map("restaurant_order_id")
+  invoiceId         String?               @map("invoice_id")
+  guestName         String                @map("guest_name")
+  roomNumber        String?               @map("room_number")
+  orderNumber       String?               @map("order_number")
+  orderType         String?               @map("order_type")
+  totalAmount       Float                 @map("total_amount")
+  paidAmount        Float                 @default(0) @map("paid_amount")
+  dueAmount         Float                 @map("due_amount")
+  billedAt          DateTime              @default(now()) @map("billed_at")
+  hotelClearedAt    DateTime?             @map("hotel_cleared_at")
+  hotelClearedBy    String?               @map("hotel_cleared_by")
+  notes             String?
+  companyLedger     CompanyLedger         @relation(fields: [companyLedgerId], references: [id], onDelete: Cascade)
+  booking           Booking?              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  restaurantOrder   RestaurantOrder?      @relation(fields: [restaurantOrderId], references: [id], onDelete: Cascade)
+  hotelClearer      User?                 @relation("HotelClearedBills", fields: [hotelClearedBy], references: [id])
 
   @@index([companyLedgerId], map: "company_ledger_bills_company_ledger_id_fkey")
+  @@index([settlementStage], map: "company_ledger_bills_settlement_stage_idx")
   @@map("company_ledger_bills")
 }
 
@@ -131,6 +144,7 @@ model Customer {
   address   String?
   idType       String?
   idNumber             String?
+  visaExpiryDate       String? @map("visa_expiry_date")
   registrationNumber   String? @map("registration_number")
   nationality          String?
   dateOfBirth  String?
@@ -292,6 +306,7 @@ model RestaurantOrder {
   vatAmount     Float            @default(0)
   vatPercent    Float            @default(0)
   totalAmount   Float            @default(0)
+  billingDisposition RestaurantBillingDisposition @default(PENDING) @map("billing_disposition")
   notes         String?
   waiterId      String?          @map("waiter_id")
   createdBy     String
@@ -302,8 +317,9 @@ model RestaurantOrder {
   booking       Booking?         @relation(fields: [bookingId], references: [id])
   creator       User             @relation(fields: [createdBy], references: [id])
   waiter        RestaurantWaiter? @relation(fields: [waiterId], references: [id])
-  room          Room?            @relation(fields: [roomId], references: [id])
-  table         RestaurantTable? @relation(fields: [tableId], references: [id])
+  room              Room?              @relation(fields: [roomId], references: [id])
+  table             RestaurantTable?   @relation(fields: [tableId], references: [id])
+  companyLedgerBill CompanyLedgerBill?
 
   @@index([bookingId], map: "restaurant_orders_bookingId_fkey")
   @@index([createdBy], map: "restaurant_orders_createdBy_fkey")
@@ -518,6 +534,7 @@ model Setting {
 enum RoleType {
   ADMIN
   HOTEL_STAFF
+  HOTEL_FD
   RESTAURANT_STAFF
 }
 
@@ -561,6 +578,12 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum RestaurantBillingDisposition {
+  PENDING
+  HOTEL_BILL
+  PAID_DIRECT
+}
+
 enum PaymentMethod {
   NONE
   CASH
@@ -592,6 +615,17 @@ enum InvoiceStatus {
   PAID
   PARTIALLY_PAID
   CANCELLED
+}
+
+enum CompanyLedgerBillType {
+  BOOKING
+  RESTAURANT_ORDER
+}
+
+enum LedgerSettlementStage {
+  OPEN
+  HOTEL_CLEARED
+  PAID
 }
 
 enum HousekeepingStatus {

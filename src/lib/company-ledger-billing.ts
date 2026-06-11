@@ -222,6 +222,9 @@ export async function recordCompanyLedgerBillPayment(
   if (!bill) {
     throw new Error('Company ledger bill not found')
   }
+  if (bill.billType !== 'BOOKING' || !bill.bookingId) {
+    throw new Error('Use restaurant payment route for CloudView restaurant bills')
+  }
   if (bill.dueAmount <= 0) {
     throw new Error('This bill has no balance due')
   }

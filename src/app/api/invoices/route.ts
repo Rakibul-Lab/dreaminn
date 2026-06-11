@@ -9,7 +9,7 @@ import { buildInvoiceLineItems, replaceInvoiceLineItems } from '@/lib/invoice-li
 // GET /api/invoices - List invoices with filters
 export async function GET(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF');
+    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF', 'HOTEL_FD');
     if (authResult instanceof Response) return authResult;
 
     const { searchParams } = new URL(request.url);
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 // POST /api/invoices - Generate unified invoice for a booking
 export async function POST(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF');
+    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF', 'HOTEL_FD');
     if (authResult instanceof Response) return authResult;
 
     const user = authResult;

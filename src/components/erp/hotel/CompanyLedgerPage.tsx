@@ -33,11 +33,18 @@ import {
 } from 'lucide-react';
 import { getPaginationPages } from '@/lib/pagination-pages';
 import { formatBdt } from '@/lib/currency';
-import { openCompanyLedgerCompanyViewTab } from '@/lib/company-ledger-navigation';
+import {
+  openCloudViewRestaurantLedgerTab,
+  openCompanyLedgerCompanyViewTab,
+} from '@/lib/company-ledger-navigation';
+import { useAuthStore, canAccessAdmin } from '@/lib/auth-store';
+import { CLOUDVIEW_RESTAURANT_SLUG } from '@/lib/cloudview-ledger';
 
 interface CompanyLedgerRecord {
   id: string;
   name: string;
+  slug?: string | null;
+  isSystem?: boolean;
   contactPerson?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -61,6 +68,8 @@ const emptyCompanyForm = {
 
 export function CompanyLedgerPage() {
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = canAccessAdmin(user?.role);
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -221,6 +230,11 @@ export function CompanyLedgerPage() {
                     <div className="min-w-0 flex-1">
                       <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                         {company.name}
+                        {company.isSystem && (
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                            System
+                          </Badge>
+                        )}
                         <Badge variant="secondary" className="font-normal">
                           <Users className="h-3 w-3 mr-1" />
                           {guestCount} guest{guestCount !== 1 ? 's' : ''}
@@ -263,33 +277,47 @@ export function CompanyLedgerPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEditCompany(company)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
-                        title="Delete company"
-                        disabled={deleteCompanyMutation.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remove "${company.name}" and all its guests from the ledger?`
-                            )
-                          ) {
-                            deleteCompanyMutation.mutate(company.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {(!company.isSystem || isAdmin) && (
+                        <Button size="sm" variant="outline" onClick={() => openEditCompany(company)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {!company.isSystem && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                          title="Delete company"
+                          disabled={deleteCompanyMutation.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remove "${company.name}" and all its guests from the ledger?`
+                              )
+                            ) {
+                              deleteCompanyMutation.mutate(company.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
                         className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                        title="View guest list & settle due"
-                        onClick={() => openCompanyLedgerCompanyViewTab(company.id)}
+                        title={
+                          company.slug === CLOUDVIEW_RESTAURANT_SLUG
+                            ? 'Open CloudView restaurant ledger'
+                            : 'View guest list & settle due'
+                        }
+                        onClick={() => {
+                          if (company.slug === CLOUDVIEW_RESTAURANT_SLUG) {
+                            openCloudViewRestaurantLedgerTab();
+                          } else {
+                            openCompanyLedgerCompanyViewTab(company.id);
+                          }
+                        }}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>

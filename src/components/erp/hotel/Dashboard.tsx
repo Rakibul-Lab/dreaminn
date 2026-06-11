@@ -127,7 +127,7 @@ export function Dashboard({ onNavigate }: DashboardProps = {}) {
   if (!dashboard) return null;
 
   // For ADMIN and HOTEL_STAFF
-  if (dashboard.role === 'ADMIN' || dashboard.role === 'HOTEL_STAFF') {
+  if (dashboard.role === 'ADMIN' || dashboard.role === 'HOTEL_STAFF' || dashboard.role === 'HOTEL_FD') {
     return <HotelAdminDashboard data={dashboard} onNavigate={onNavigate} />;
   }
 

@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
       case 'ADMIN':
         return await handleAdminDashboard();
       case 'HOTEL_STAFF':
-        return await handleHotelDashboard();
+      case 'HOTEL_FD':
+        return await handleHotelDashboard(user.role);
       case 'RESTAURANT_STAFF':
         return await handleRestaurantDashboard();
       default:
@@ -176,7 +177,7 @@ async function handleAdminDashboard() {
 }
 
 // Hotel Staff Dashboard - Hotel-focused
-async function handleHotelDashboard() {
+async function handleHotelDashboard(role: 'HOTEL_STAFF' | 'HOTEL_FD') {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
@@ -262,7 +263,7 @@ async function handleHotelDashboard() {
   });
 
   return successResponse({
-    role: 'HOTEL_STAFF',
+    role,
     today: today.toISOString().slice(0, 10),
     rooms: {
       total: totalRooms,

@@ -71,7 +71,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;
@@ -200,7 +200,8 @@ export async function PUT(
         const emailError = await getEmailValidationError(
           emailValue,
           true,
-          customerPatch.emailVerificationToken as string | undefined
+          customerPatch.emailVerificationToken as string | undefined,
+          { allowUnverifiedMailbox: customerPatch.allowUnverifiedMailbox === true }
         );
         if (emailError) return errorResponse(emailError);
         customerUpdate.email = emailValue;
@@ -212,6 +213,11 @@ export async function PUT(
       if (customerPatch.idNumber !== undefined) {
         customerUpdate.idNumber = customerPatch.idNumber
           ? String(customerPatch.idNumber).trim()
+          : null;
+      }
+      if (customerPatch.visaExpiryDate !== undefined) {
+        customerUpdate.visaExpiryDate = customerPatch.visaExpiryDate
+          ? String(customerPatch.visaExpiryDate).trim()
           : null;
       }
       if (customerPatch.idDocPath !== undefined) {
@@ -274,6 +280,14 @@ export async function PUT(
         customerPatch?.nationality !== undefined
           ? String(customerPatch.nationality || '').trim()
           : existing.customer.nationality?.trim() || '';
+      const idType =
+        customerPatch?.idType !== undefined
+          ? String(customerPatch.idType || '').trim()
+          : existing.customer.idType?.trim() || '';
+      const visaExpiryDate =
+        customerPatch?.visaExpiryDate !== undefined
+          ? String(customerPatch.visaExpiryDate || '').trim()
+          : existing.customer.visaExpiryDate?.trim() || '';
 
       const missing = getCompleteReservationMissingFields({
         nationality,
@@ -282,6 +296,8 @@ export async function PUT(
         address,
         registrationNumber,
         idDocumentCount: idDocCount,
+        idType,
+        visaExpiryDate,
       });
       if (missing.length > 0) {
         return errorResponse(

@@ -16,7 +16,7 @@ import {
   LayoutDashboard,
 } from 'lucide-react'
 import { api } from '@/lib/api-client'
-import { useAuthStore } from '@/lib/auth-store'
+import { useAuthStore, formatRoleLabel } from '@/lib/auth-store'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,21 +38,16 @@ interface ProfileData {
   updatedAt: string
 }
 
-const roleLabels: Record<string, string> = {
-  ADMIN: 'Administrator',
-  HOTEL_STAFF: 'Hotel Staff',
-  RESTAURANT_STAFF: 'Restaurant Staff',
-}
-
 const roleBadgeColors: Record<string, string> = {
   ADMIN: 'bg-red-50 text-red-700 border-red-200',
   HOTEL_STAFF: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  HOTEL_FD: 'bg-teal-50 text-teal-700 border-teal-200',
   RESTAURANT_STAFF: 'bg-amber-50 text-amber-700 border-amber-200',
 }
 
 function RoleIcon({ role }: { role: string }) {
   if (role === 'ADMIN') return <LayoutDashboard className="h-3.5 w-3.5" />
-  if (role === 'HOTEL_STAFF') return <Hotel className="h-3.5 w-3.5" />
+  if (role === 'HOTEL_STAFF' || role === 'HOTEL_FD') return <Hotel className="h-3.5 w-3.5" />
   if (role === 'RESTAURANT_STAFF') return <UtensilsCrossed className="h-3.5 w-3.5" />
   return <Shield className="h-3.5 w-3.5" />
 }
@@ -228,7 +223,7 @@ export function ProfilePage() {
                 className={`inline-flex items-center gap-1 ${roleBadgeColors[profile.role] || ''}`}
               >
                 <RoleIcon role={profile.role} />
-                {roleLabels[profile.role] || profile.role}
+                {formatRoleLabel(profile.role)}
               </Badge>
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">

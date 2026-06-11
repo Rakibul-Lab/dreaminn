@@ -115,6 +115,7 @@ type GuestDraft = {
   guestNationality: string
   idType: IdDocumentType
   idNumber: string
+  visaExpiryDate: string
   registrationNumber: string
   idDocuments: IdDocumentItem[]
   existingDocsStatus: 'idle' | 'loading' | 'none' | 'found'
@@ -159,6 +160,7 @@ function emptyGuestDraft(): GuestDraft {
     guestNationality: DEFAULT_NATIONALITY,
     idType: 'national_id',
     idNumber: '',
+    visaExpiryDate: '',
     registrationNumber: '',
     idDocuments: [],
     existingDocsStatus: 'idle',
@@ -215,7 +217,6 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
   const [editDraftLoaded, setEditDraftLoaded] = useState(false)
   const [idEntryStarted, setIdEntryStarted] = useState(isEditMode)
   const [defaultVatPercent, setDefaultVatPercent] = useState(DEFAULT_VAT_PERCENT)
-  const [guestEmailBlocking, setGuestEmailBlocking] = useState(false)
   const [guestEmailVerificationToken, setGuestEmailVerificationToken] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<GuestMode, ReservationWizardDraft>>({
     new: emptyReservationDraft(),
@@ -237,6 +238,7 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
     guestNationality,
     idType,
     idNumber,
+    visaExpiryDate,
     registrationNumber,
     idDocuments,
     existingDocsStatus,
@@ -373,6 +375,7 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
               ? (customer.idType as IdDocumentType)
               : 'national_id',
           idNumber: String(customer?.idNumber ?? ''),
+          visaExpiryDate: String(customer?.visaExpiryDate ?? ''),
           registrationNumber: String(customer?.registrationNumber ?? ''),
           idDocuments: idDocs.map((d) => ({ path: d.filePath, previewUrl: d.filePath })),
           existingDocsStatus: idDocs.length > 0 ? 'found' : 'none',
@@ -560,6 +563,7 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
           idTypeValue
         ),
         idNumber: selected.idNumber || '',
+        visaExpiryDate: selected.visaExpiryDate || '',
         // Registration is per reservation — never pre-fill from the guest profile.
         registrationNumber: '',
       },
@@ -629,10 +633,13 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
     phone: guestPhone.trim(),
     email: guestEmail.trim() || null,
     emailVerificationToken: guestEmailVerificationToken || undefined,
+    allowUnverifiedMailbox: true,
     address: guestAddress.trim() || null,
     nationality: resolvedGuestNationality(),
     idType,
     idNumber: idNumber.trim() || null,
+    visaExpiryDate:
+      idType === 'passport' && visaExpiryDate.trim() ? visaExpiryDate.trim() : null,
     registrationNumber: registrationNumber.trim() || null,
     idDocPath: idDocuments[0]?.path || null,
   })
@@ -767,13 +774,11 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
         address: guestAddress,
         registrationNumber,
         idDocumentCount: idDocuments.length,
+        idType,
+        visaExpiryDate,
       })
       if (missing.length > 0) {
         toast.error(`Please fill required fields: ${missing.join(', ')}`)
-        return
-      }
-      if (guestEmailBlocking) {
-        toast.error('Verify the guest email before completing the reservation')
         return
       }
     }
@@ -804,10 +809,13 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
             phone: guestPhone.trim(),
             email: guestEmail.trim() || null,
             emailVerificationToken: guestEmailVerificationToken || undefined,
+            allowUnverifiedMailbox: true,
             address: guestAddress.trim() || null,
             nationality: guestNationality.trim() || DEFAULT_NATIONALITY,
             idType,
             idNumber: idNumber.trim() || null,
+            visaExpiryDate:
+              idType === 'passport' && visaExpiryDate.trim() ? visaExpiryDate.trim() : null,
             registrationNumber: registrationNumber.trim() || null,
             idDocPath: idDocuments[0]?.path || null,
           },
@@ -903,6 +911,8 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
     address: guestAddress,
     registrationNumber,
     idDocumentCount: idDocuments.length,
+    idType,
+    visaExpiryDate,
   })
   const canCompleteReservation = completeReservationMissing.length === 0
   const initialMissingFields = getInitialReservationGuestMissingFields(guestMode, {
@@ -913,10 +923,8 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
   })
   const guestDetailsReady = initialMissingFields.length === 0
   /** Step 1: initial fields only, or all completion fields once ID entry has started / full reservation. */
-  const guestEmailInvalid = Boolean(guestEmail.trim()) && guestEmailBlocking
   const canGoStep2 =
     guestDetailsReady &&
-    !guestEmailInvalid &&
     (isInitialFlow && !hasIdActivity ? true : completeReservationMissing.length === 0)
   const canGoStep3 = datesValid && Boolean(selectedRoomId) && !roomsLoading
   const advanceAmount = parseFloat(advancePayment) || 0
@@ -1127,7 +1135,10 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
                 nationality={guestNationality}
                 idType={idType}
                 onIdTypeChange={(type) => {
-                  patchGuest({ idType: type })
+                  patchGuest({
+                    idType: type,
+                    visaExpiryDate: type === 'passport' ? visaExpiryDate : '',
+                  })
                   if (idDocuments.length > 0 || idNumber.trim()) {
                     setIsInitialFlow(false)
                     setIdEntryStarted(true)
@@ -1202,6 +1213,18 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
                         }}
                       />
                     </div>
+                    {idType === 'passport' && (
+                      <div className="space-y-1">
+                        <Label>
+                          Visa expiry date{showCompleteRequiredMarkers ? ' *' : ''}
+                        </Label>
+                        <Input
+                          type="date"
+                          value={visaExpiryDate}
+                          onChange={(e) => patchGuest({ visaExpiryDate: e.target.value })}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-1">
                       <Label>
                         Registration number{showCompleteRequiredMarkers ? ' *' : ''}
@@ -1226,8 +1249,8 @@ export function NewReservationWizard({ editBookingId }: NewReservationWizardProp
                         value={guestEmail}
                         onChange={(email) => patchGuest({ guestEmail: email })}
                         optional={!showCompleteRequiredMarkers}
+                        allowUnverifiedMailbox
                         onValidationChange={(result) => {
-                          setGuestEmailBlocking(result.isBlocking)
                           setGuestEmailVerificationToken(result.verificationToken ?? null)
                         }}
                       />

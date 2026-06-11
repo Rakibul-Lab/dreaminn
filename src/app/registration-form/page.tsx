@@ -40,7 +40,7 @@ export default function RegistrationFormPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto flex w-full max-w-4xl justify-center px-4 py-6 sm:px-6 sm:py-8 print:max-w-none print:bg-white print:p-0">
         <BlankRegistrationFormView />
       </main>
       <AppDevelopedByFooter printHidden />

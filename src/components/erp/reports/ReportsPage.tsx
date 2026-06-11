@@ -1,22 +1,35 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { useAuthStore, canAccessHotel, canAccessRestaurant, canAccessAdmin } from '@/lib/auth-store'
-import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
+import { format } from 'date-fns'
 import {
-  BarChart, LineChart, PieChart, Bar, Line, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  BarChart, PieChart, Bar, Pie, Cell,
+  XAxis, YAxis, CartesianGrid
 } from 'recharts'
 import {
-  BarChart3, TrendingUp, PieChart as PieIcon, Download, Calendar
+  BarChart3, Download, CalendarRange, FileDown, Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select'
+import {
+  resolveBookingDateRange,
+  type BookingDatePreset,
+} from '@/lib/booking-date-filter'
+import {
+  downloadReportsPdf,
+  REPORT_DATE_PRESET_OPTIONS,
+  type ReportsExportTab,
+} from '@/lib/reports-export'
+import { toast } from 'sonner'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
@@ -52,100 +65,126 @@ const pieChartConfig: ChartConfig = {
   CANCELLED: { label: 'Cancelled', color: '#dc2626' },
 }
 
+function buildReportQueryParams(
+  type: string,
+  dateFrom?: string,
+  dateTo?: string
+): string {
+  const params = new URLSearchParams({ type })
+  if (dateFrom) params.set('startDate', dateFrom)
+  if (dateTo) params.set('endDate', dateTo)
+  return `/reports?${params.toString()}`
+}
+
 export default function ReportsPage() {
   const { user } = useAuthStore()
-  const [dateRange, setDateRange] = useState({
-    startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-  })
+  const [datePreset, setDatePreset] = useState<BookingDatePreset>('today')
+  const [customDateFrom, setCustomDateFrom] = useState('')
+  const [customDateTo, setCustomDateTo] = useState('')
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   const isHotel = canAccessHotel(user?.role)
   const isRestaurant = canAccessRestaurant(user?.role)
   const isAdmin = canAccessAdmin(user?.role)
 
+  const defaultTab: ReportsExportTab = isRestaurant || isAdmin
+    ? 'restaurant'
+    : isHotel
+      ? 'hotel'
+      : 'restaurant'
+  const [activeTab, setActiveTab] = useState<ReportsExportTab>(defaultTab)
+
+  const dateRange = useMemo(
+    () => resolveBookingDateRange(datePreset, customDateFrom, customDateTo),
+    [datePreset, customDateFrom, customDateTo]
+  )
+
+  const reportQueryKey = [datePreset, dateRange.dateFrom, dateRange.dateTo] as const
+
   // Restaurant daily sales
   const { data: restaurantDaily, isLoading: loadingDaily } = useQuery({
-    queryKey: ['report-restaurant-daily', dateRange],
+    queryKey: ['report-restaurant-daily', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'restaurant-daily', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('restaurant-daily', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isRestaurant || isAdmin,
   })
 
-  // Restaurant monthly sales
   const { data: restaurantMonthly, isLoading: loadingMonthly } = useQuery({
-    queryKey: ['report-restaurant-monthly', dateRange],
+    queryKey: ['report-restaurant-monthly', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'restaurant-monthly', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('restaurant-monthly', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isRestaurant || isAdmin,
   })
 
-  // Order status
   const { data: orderStatus, isLoading: loadingOrderStatus } = useQuery({
-    queryKey: ['report-order-status', dateRange],
+    queryKey: ['report-order-status', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'order-status', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('order-status', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isRestaurant || isAdmin,
   })
 
-  // Hotel revenue
   const { data: hotelRevenue, isLoading: loadingHotelRevenue } = useQuery({
-    queryKey: ['report-hotel-revenue', dateRange],
+    queryKey: ['report-hotel-revenue', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'hotel-revenue', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('hotel-revenue', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isHotel || isAdmin,
   })
 
-  // Hotel occupancy
   const { data: hotelOccupancy, isLoading: loadingOccupancy } = useQuery({
-    queryKey: ['report-hotel-occupancy', dateRange],
+    queryKey: ['report-hotel-occupancy', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'hotel-occupancy', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('hotel-occupancy', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isHotel || isAdmin,
   })
 
-  // Food charges by room
   const { data: foodCharges, isLoading: loadingFoodCharges } = useQuery({
-    queryKey: ['report-food-charges', dateRange],
+    queryKey: ['report-food-charges', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'food-charges-by-room', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('food-charges-by-room', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isHotel || isAdmin,
   })
 
-  // Combined revenue
   const { data: combinedRevenue, isLoading: loadingCombined } = useQuery({
-    queryKey: ['report-combined-revenue', dateRange],
+    queryKey: ['report-combined-revenue', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'combined-revenue', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('combined-revenue', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isAdmin,
   })
 
-  // Admin summary
   const { data: adminSummary, isLoading: loadingAdminSummary } = useQuery({
-    queryKey: ['report-admin-summary', dateRange],
+    queryKey: ['report-admin-summary', ...reportQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ type: 'admin-summary', ...dateRange })
-      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(`/reports?${params.toString()}`)
+      const res = await api.get<{ success: boolean; data: Record<string, unknown> }>(
+        buildReportQueryParams('admin-summary', dateRange.dateFrom, dateRange.dateTo)
+      )
       return res.data
     },
     enabled: isAdmin,
@@ -201,6 +240,92 @@ export default function ReportsPage() {
   // Top customers
   const topCustomers = adminSummary?.topCustomers as Array<{ name: string; totalSpent: number; bookingCount: number }> | undefined
 
+  const handleExportPdf = async () => {
+    setExportingPdf(true)
+    const toastId = toast.loading('Preparing PDF export…')
+    try {
+      if (activeTab === 'restaurant' && !(isRestaurant || isAdmin)) {
+        throw new Error('No restaurant report data available')
+      }
+      if (activeTab === 'hotel' && !(isHotel || isAdmin)) {
+        throw new Error('No hotel report data available')
+      }
+      if (activeTab === 'combined' && !isAdmin) {
+        throw new Error('Combined reports are admin only')
+      }
+
+      await downloadReportsPdf(
+        {
+          restaurant:
+            activeTab === 'restaurant'
+              ? {
+                  totalSales: (restaurantDaily?.totalSales as number) ?? 0,
+                  totalOrders: (restaurantDaily?.totalOrders as number) ?? 0,
+                  averageOrderValue: (restaurantDaily?.averageOrderValue as number) ?? 0,
+                  dailyBreakdown: restaurantMonthly?.dailyBreakdown as Record<string, { orders: number; sales: number }>,
+                  statusDistribution: orderStatus?.statusDistribution as Record<string, { count: number; totalAmount: number }>,
+                  topSellingItems: topItems,
+                }
+              : undefined,
+          hotel:
+            activeTab === 'hotel'
+              ? {
+                  totalRevenue: (hotelRevenue?.totalRevenue as number) ?? 0,
+                  totalBookings: (hotelRevenue?.totalBookings as number) ?? 0,
+                  averageRate: (hotelRevenue?.averageRate as number) ?? 0,
+                  occupancyRate: (hotelOccupancy?.occupancyRate as number) ?? 0,
+                  revenueByType: hotelRevenue?.revenueByType as Record<string, { bookings: number; revenue: number }>,
+                  occupancy: {
+                    totalRooms: (hotelOccupancy?.totalRooms as number) ?? 0,
+                    availableRooms: (hotelOccupancy?.availableRooms as number) ?? 0,
+                    occupiedRooms: (hotelOccupancy?.occupiedRooms as number) ?? 0,
+                    cleaningRooms: (hotelOccupancy?.cleaningRooms as number) ?? 0,
+                    maintenanceRooms: (hotelOccupancy?.maintenanceRooms as number) ?? 0,
+                    todayCheckins: (hotelOccupancy?.todayCheckins as number) ?? 0,
+                    todayCheckouts: (hotelOccupancy?.todayCheckouts as number) ?? 0,
+                  },
+                  foodCharges: roomsData,
+                  foodGrandTotal: (foodCharges?.grandTotal as number) ?? undefined,
+                }
+              : undefined,
+          combined:
+            activeTab === 'combined'
+              ? {
+                  totalRevenue: (combinedRevenue?.totalRevenue as number) ?? 0,
+                  hotelRevenue: (combinedRevenue?.hotelRevenue as number) ?? 0,
+                  restaurantRevenue: (combinedRevenue?.restaurantRevenue as number) ?? 0,
+                  extraRevenue: (combinedRevenue?.extraRevenue as number) ?? 0,
+                  profitSummary: adminSummary?.profitSummary as {
+                    totalPaymentsReceived?: number
+                    outstandingDues?: number
+                    netPosition?: number
+                  },
+                  topCustomers,
+                }
+              : undefined,
+        },
+        {
+          tab: activeTab,
+          datePreset,
+          customDateFrom,
+          customDateTo,
+          generatedBy: user ? { name: user.name, email: user.email, role: user.role } : undefined,
+        }
+      )
+      toast.success('Report exported to PDF', { id: toastId })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Export failed'
+      toast.error(msg, { id: toastId })
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
+  const isReportLoading =
+    (activeTab === 'restaurant' && (loadingDaily || loadingMonthly || loadingOrderStatus)) ||
+    (activeTab === 'hotel' && (loadingHotelRevenue || loadingOccupancy || loadingFoodCharges)) ||
+    (activeTab === 'combined' && (loadingCombined || loadingAdminSummary))
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -211,29 +336,66 @@ export default function ReportsPage() {
           </h2>
           <p className="text-muted-foreground text-sm mt-1">Comprehensive business insights</p>
         </div>
-        <div className="flex gap-2 items-end">
-          <div>
-            <Label className="text-xs">Start Date</Label>
-            <Input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange((d) => ({ ...d, startDate: e.target.value }))}
-              className="w-40"
-            />
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Period</Label>
+            <Select
+              value={datePreset}
+              onValueChange={(v) => setDatePreset(v as BookingDatePreset)}
+            >
+              <SelectTrigger className="w-44">
+                <CalendarRange className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Period" />
+              </SelectTrigger>
+              <SelectContent>
+                {REPORT_DATE_PRESET_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <Label className="text-xs">End Date</Label>
-            <Input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange((d) => ({ ...d, endDate: e.target.value }))}
-              className="w-40"
-            />
-          </div>
+          {datePreset === 'custom' && (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="report-date-from" className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  id="report-date-from"
+                  type="date"
+                  value={customDateFrom}
+                  onChange={(e) => setCustomDateFrom(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="report-date-to" className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  id="report-date-to"
+                  type="date"
+                  value={customDateTo}
+                  onChange={(e) => setCustomDateTo(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            </>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => void handleExportPdf()}
+            disabled={exportingPdf || isReportLoading}
+          >
+            {exportingPdf ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4 mr-2" />
+            )}
+            Export PDF
+          </Button>
         </div>
       </div>
 
-      <Tabs defaultValue={isRestaurant ? 'restaurant' : isHotel ? 'hotel' : 'restaurant'}>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ReportsExportTab)}>
         <TabsList>
           {(isRestaurant || isAdmin) && <TabsTrigger value="restaurant">Restaurant</TabsTrigger>}
           {(isHotel || isAdmin) && <TabsTrigger value="hotel">Hotel</TabsTrigger>}
@@ -275,7 +437,7 @@ export default function ReportsPage() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-center">
-                  <CardTitle className="text-base">Daily Sales (Monthly View)</CardTitle>
+                  <CardTitle className="text-base">Daily Sales Trend</CardTitle>
                   <Button variant="ghost" size="sm" onClick={() => exportCSV(dailyChartData, 'daily-sales')}>
                     <Download className="h-4 w-4" />
                   </Button>

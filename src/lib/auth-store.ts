@@ -9,7 +9,7 @@ export interface AuthState {
     name: string;
     avatar?: string | null;
     phone?: string | null;
-    role: 'ADMIN' | 'HOTEL_STAFF' | 'RESTAURANT_STAFF';
+    role: 'ADMIN' | 'HOTEL_STAFF' | 'HOTEL_FD' | 'RESTAURANT_STAFF';
   } | null;
   token: string | null;
   lastActivityAt: number | null;
@@ -57,14 +57,11 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-export function canAccessHotel(role: string | undefined): boolean {
-  return role === 'ADMIN' || role === 'HOTEL_STAFF';
-}
-
-export function canAccessRestaurant(role: string | undefined): boolean {
-  return role === 'ADMIN' || role === 'RESTAURANT_STAFF';
-}
-
-export function canAccessAdmin(role: string | undefined): boolean {
-  return role === 'ADMIN';
-}
+export {
+  canAccessHotel,
+  canAccessRestaurant,
+  canAccessAdmin,
+  canManageRoomInventory,
+  isHotelFrontDesk,
+  formatRoleLabel,
+} from '@/lib/roles';

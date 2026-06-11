@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RoleType } from '@prisma/client';
 import { isIdleSessionExpired } from '@/lib/session';
+import {
+  canAccessAdmin as canAccessAdminRole,
+  canAccessHotel as canAccessHotelRole,
+  canAccessRestaurant as canAccessRestaurantRole,
+  canManageRoomInventory,
+} from '@/lib/roles';
+
+export const HOTEL_ACCESS_ROLES: RoleType[] = ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'];
+export const HOTEL_MANAGER_ROLES: RoleType[] = ['ADMIN', 'HOTEL_STAFF'];
+
+export { canManageRoomInventory };
 
 // Simple session-based auth using headers
 // In production, use proper JWT/NextAuth with secure tokens
@@ -66,15 +77,23 @@ export function requireRole(request: NextRequest, ...roles: RoleType[]): AuthUse
   return result;
 }
 
+export function requireHotelAccess(request: NextRequest): AuthUser | NextResponse {
+  return requireRole(request, ...HOTEL_ACCESS_ROLES);
+}
+
+export function requireHotelManager(request: NextRequest): AuthUser | NextResponse {
+  return requireRole(request, ...HOTEL_MANAGER_ROLES);
+}
+
 // Permission checks
 export function canAccessHotel(role: RoleType): boolean {
-  return role === 'ADMIN' || role === 'HOTEL_STAFF';
+  return canAccessHotelRole(role);
 }
 
 export function canAccessRestaurant(role: RoleType): boolean {
-  return role === 'ADMIN' || role === 'RESTAURANT_STAFF';
+  return canAccessRestaurantRole(role);
 }
 
 export function canAccessAdmin(role: RoleType): boolean {
-  return role === 'ADMIN';
+  return canAccessAdminRole(role);
 }

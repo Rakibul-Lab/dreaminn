@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { requireRole } from '@/lib/auth';
+import { requireHotelAccess, requireHotelManager } from '@/lib/auth';
 import { successResponse, errorResponse, notFoundResponse, logActivity } from '@/lib/api-utils';
-import { RoleType } from '@prisma/client';
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +31,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireHotelAccess(request);
     if (authResult instanceof Response) return authResult;
     const authUser = await db.user.findUnique({
       where: { id: authResult.id },
@@ -50,8 +49,16 @@ export async function PUT(
       return notFoundResponse('Room');
     }
 
-    // If typeId is being changed, verify it exists
-    if (body.typeId) {
+    const isFrontDeskOnly = authResult.role === 'HOTEL_FD';
+    if (isFrontDeskOnly) {
+      const hasRestrictedField =
+        body.floor !== undefined ||
+        body.typeId !== undefined ||
+        body.roomNumber !== undefined;
+      if (hasRestrictedField || body.status === undefined) {
+        return errorResponse('Front desk can only update room status', 403);
+      }
+    } else if (body.typeId) {
       const roomType = await db.roomType.findUnique({ where: { id: body.typeId } });
       if (!roomType) {
         return errorResponse('Room type not found');
@@ -60,9 +67,11 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {};
     if (body.status !== undefined) updateData.status = body.status;
-    if (body.floor !== undefined) updateData.floor = body.floor;
-    if (body.typeId !== undefined) updateData.typeId = body.typeId;
-    if (body.roomNumber !== undefined) updateData.roomNumber = body.roomNumber;
+    if (!isFrontDeskOnly) {
+      if (body.floor !== undefined) updateData.floor = body.floor;
+      if (body.typeId !== undefined) updateData.typeId = body.typeId;
+      if (body.roomNumber !== undefined) updateData.roomNumber = body.roomNumber;
+    }
 
     const room = await db.room.update({
       where: { id },
@@ -120,7 +129,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType);
+    const authResult = requireHotelManager(request);
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;

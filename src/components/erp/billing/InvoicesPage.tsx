@@ -152,7 +152,7 @@ export default function InvoicesPage() {
       <Card className="border-amber-200 bg-amber-50">
         <CardContent className="p-6 text-center">
           <p className="text-amber-700 font-medium">Access Denied</p>
-          <p className="text-amber-600 text-sm mt-1">Only Admin and Hotel Staff can access invoices.</p>
+          <p className="text-amber-600 text-sm mt-1">Only hotel team members and admins can access invoices.</p>
         </CardContent>
       </Card>
     )

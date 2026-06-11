@@ -166,7 +166,7 @@ export async function PATCH(
         // For room service, also notify hotel staff
         if (order.orderType === 'ROOM_SERVICE') {
           const hotelStaff = await db.user.findMany({
-            where: { role: 'HOTEL_STAFF', active: true },
+            where: { role: { in: ['HOTEL_STAFF', 'HOTEL_FD'] }, active: true },
             select: { id: true },
           });
 

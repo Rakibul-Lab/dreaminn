@@ -116,7 +116,7 @@ export function RestaurantDuesPanel() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
-  const canBulkSettle = canAccessAdmin(user?.role) || user?.role === 'HOTEL_STAFF'
+  const canBulkSettle = canAccessAdmin(user?.role) || user?.role === 'HOTEL_STAFF' || user?.role === 'HOTEL_FD'
   const isRestaurantStaff = user?.role === 'RESTAURANT_STAFF'
 
   const [search, setSearch] = useState('')

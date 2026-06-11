@@ -14,6 +14,8 @@ type UseEmailValidationOptions = {
   optional?: boolean
   mode?: 'full' | 'format-only'
   debounceMs?: number
+  /** Reservation guest: show mailbox warnings but do not block the form. */
+  allowUnverifiedMailbox?: boolean
 }
 
 type ApiVerifyData = {
@@ -57,6 +59,7 @@ export function useEmailValidation({
   optional = false,
   mode = 'full',
   debounceMs = 1200,
+  allowUnverifiedMailbox = false,
 }: UseEmailValidationOptions) {
   const [result, setResult] = useState<EmailValidationResult>(IDLE)
   const [verificationToken, setVerificationToken] = useState<string | null>(null)
@@ -139,7 +142,15 @@ export function useEmailValidation({
         setVerificationToken(data.verificationToken)
       }
 
-      const next = mapApiToResult(data)
+      let next = mapApiToResult(data)
+      if (
+        allowUnverifiedMailbox &&
+        next.mailboxExists === false &&
+        next.formatValid !== false &&
+        next.domainValid !== false
+      ) {
+        next = { ...next, status: 'warning', valid: true }
+      }
       setResult(resolveOptionalEmailValidation(email, next, optional))
     } catch {
       if (currentRequest !== requestId.current) return
@@ -153,7 +164,7 @@ export function useEmailValidation({
         needsOtp: true,
       })
     }
-  }, [email, mode, optional])
+  }, [email, mode, optional, allowUnverifiedMailbox])
 
   useEffect(() => {
     const trimmed = email.trim()
@@ -262,10 +273,14 @@ export function useEmailValidation({
   const resolved = resolveOptionalEmailValidation(email, result, optional)
   const mailboxConfirmed =
     resolved.mailboxExists === true || Boolean(verificationToken || resolved.verificationToken)
-  const isBlocking =
-    mode === 'format-only'
-      ? !resolved.valid && !(optional && !email.trim())
-      : !(optional && !email.trim()) && !mailboxConfirmed && resolved.status !== 'idle'
+  const isBlocking = (() => {
+    if (optional && !email.trim()) return false
+    if (mode === 'format-only') return !resolved.valid
+    if (allowUnverifiedMailbox) {
+      return resolved.formatValid === false || resolved.domainValid === false
+    }
+    return !mailboxConfirmed && resolved.status !== 'idle'
+  })()
 
   return {
     ...resolved,

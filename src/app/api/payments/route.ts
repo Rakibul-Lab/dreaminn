@@ -10,7 +10,6 @@ import {
   paymentRequiresReference,
   isValidPaymentAccountLastFour,
 } from '@/lib/payment-method';
-import { resolveRestaurantSettlementSource } from '@/lib/restaurant-order-settle';
 
 // GET /api/payments - List payments with filters
 export async function GET(request: NextRequest) {
@@ -26,6 +25,7 @@ export async function GET(request: NextRequest) {
     const bookingId = searchParams.get('bookingId');
     const orderId = searchParams.get('orderId');
     const paymentType = searchParams.get('paymentType') as PaymentType | null;
+    const settlementSource = searchParams.get('settlementSource');
     const method = searchParams.get('method') as PaymentMethod | null;
     const startDate = searchParams.get('startDate') || searchParams.get('dateFrom');
     const endDate = searchParams.get('endDate') || searchParams.get('dateTo');
@@ -36,17 +36,14 @@ export async function GET(request: NextRequest) {
     const where: Prisma.PaymentWhereInput = {};
 
     // Role-based access control
-    if (user.role === 'HOTEL_STAFF') {
-      // Hotel staff: hotel booking payments only (not restaurant counter / dues)
+    if (user.role === 'HOTEL_STAFF' || user.role === 'HOTEL_FD') {
+      // Hotel staff: booking-linked payments (room charges + room-service / ledger settlements on guest folio)
       where.bookingId = { not: null };
-      where.orderId = null;
     } else if (user.role === 'RESTAURANT_STAFF') {
-      // Restaurant staff: own receipts + hotel due settlements on restaurant orders
+      // Restaurant staff: hotel ledger settlements + direct payments on delivered orders
       where.orderId = { not: null };
-      where.OR = [
-        { receivedBy: user.id },
-        { settlementSource: 'HOTEL_DUE' },
-      ];
+      where.paymentType = 'RESTAURANT';
+      where.settlementSource = { in: ['HOTEL_DUE', 'RESTAURANT_DIRECT'] };
     }
     // ADMIN can see all
 
@@ -59,6 +56,12 @@ export async function GET(request: NextRequest) {
     }
     if (paymentType) {
       where.paymentType = paymentType;
+    }
+    if (
+      settlementSource &&
+      (settlementSource === 'HOTEL_DUE' || settlementSource === 'RESTAURANT_DIRECT')
+    ) {
+      where.settlementSource = settlementSource;
     }
     if (method) {
       where.method = method;
@@ -168,8 +171,11 @@ export async function POST(request: NextRequest) {
       return errorResponse('You do not have permission to create hotel payments', 403);
     }
 
-    if (orderId && !canAccessRestaurant(user.role)) {
-      return errorResponse('You do not have permission to create restaurant payments', 403);
+    if (orderId) {
+      return errorResponse(
+        'Restaurant order payments must be recorded from CloudView Restaurant ledger after hotel clears the due',
+        400
+      );
     }
 
     // Validate booking exists if provided
@@ -177,14 +183,6 @@ export async function POST(request: NextRequest) {
       const booking = await db.booking.findUnique({ where: { id: bookingId } });
       if (!booking) {
         return errorResponse('Booking not found', 404);
-      }
-    }
-
-    // Validate order exists if provided
-    if (orderId) {
-      const order = await db.restaurantOrder.findUnique({ where: { id: orderId } });
-      if (!order) {
-        return errorResponse('Order not found', 404);
       }
     }
 
@@ -215,12 +213,12 @@ export async function POST(request: NextRequest) {
         method: resolvedMethod,
         paymentType,
         bookingId: bookingId || null,
-        orderId: orderId || null,
+        orderId: null,
         invoiceId: invoiceId || null,
         reference: paymentRequiresReference(resolvedMethod) ? trimmedReference : null,
         accountLastFour: paymentRequiresLastFour(resolvedMethod) ? trimmedLastFour : null,
         notes: notes || null,
-        settlementSource: orderId ? resolveRestaurantSettlementSource(user.role) : null,
+        settlementSource: null,
         receivedBy: user.id,
       },
       include: {

@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const body = await request.json();
@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
       address,
       idType,
       idNumber,
+      visaExpiryDate,
       registrationNumber,
       nationality,
       dateOfBirth,
@@ -156,7 +157,8 @@ export async function POST(request: NextRequest) {
     const emailError = await getEmailValidationError(
       email,
       true,
-      body?.emailVerificationToken
+      body?.emailVerificationToken,
+      { allowUnverifiedMailbox: body?.allowUnverifiedMailbox === true }
     );
     if (emailError) return errorResponse(emailError);
 
@@ -173,6 +175,10 @@ export async function POST(request: NextRequest) {
           address: address?.trim() || existing.address,
           idType: idType ?? existing.idType,
           idNumber: idNumber ?? existing.idNumber,
+          visaExpiryDate:
+            visaExpiryDate !== undefined
+              ? visaExpiryDate?.trim() || null
+              : existing.visaExpiryDate,
           registrationNumber: registrationNumber?.trim() || existing.registrationNumber,
           nationality: nationality?.trim() || existing.nationality,
           idDocPath: idDocPath ?? existing.idDocPath,
@@ -195,6 +201,7 @@ export async function POST(request: NextRequest) {
         address: address?.trim() || null,
         idType,
         idNumber,
+        visaExpiryDate: visaExpiryDate?.trim() || null,
         registrationNumber: registrationNumber?.trim() || null,
         nationality: nationality?.trim() || null,
         dateOfBirth,

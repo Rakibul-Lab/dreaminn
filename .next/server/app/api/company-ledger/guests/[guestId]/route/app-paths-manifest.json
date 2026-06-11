@@ -1,0 +1,3 @@
+{
+  "/api/company-ledger/guests/[guestId]/route": "app/api/company-ledger/guests/[guestId]/route.js"
+}

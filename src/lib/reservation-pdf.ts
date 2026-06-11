@@ -210,10 +210,7 @@ async function captureElementJpeg(
   }
 }
 
-export async function downloadReservationPdfFromElement(
-  element: HTMLElement,
-  fileName: string
-): Promise<void> {
+export async function buildReservationPdfFromElement(element: HTMLElement): Promise<jsPDF> {
   const restoreImages = await embedImagesAsDataUrls(element)
   const pages = collectCaptureElements(element)
 
@@ -225,10 +222,42 @@ export async function downloadReservationPdfFromElement(
       addJpegToPdfPage(pdf, dataUrl, img, i === 0)
     }
 
-    pdf.save(fileName)
+    return pdf
   } finally {
     restoreImages()
   }
+}
+
+export async function downloadReservationPdfFromElement(
+  element: HTMLElement,
+  fileName: string
+): Promise<void> {
+  const pdf = await buildReservationPdfFromElement(element)
+  pdf.save(fileName)
+}
+
+/** Opens the document PDF in a new browser tab (native PDF viewer + print). */
+export async function openReservationPdfInNewTab(
+  element: HTMLElement,
+  fileName: string
+): Promise<boolean> {
+  const pdf = await buildReservationPdfFromElement(element)
+  const blob = pdf.output('blob')
+  const url = URL.createObjectURL(blob)
+  const tab = window.open(url, '_blank', 'noopener,noreferrer')
+
+  if (!tab) {
+    URL.revokeObjectURL(url)
+    return false
+  }
+
+  try {
+    tab.document.title = fileName
+  } catch {
+    // Native PDF viewer tabs may not expose document.title
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
+  return true
 }
 
 export async function downloadReservationPdf(

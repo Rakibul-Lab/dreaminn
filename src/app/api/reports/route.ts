@@ -3,6 +3,31 @@ import { db } from '@/lib/db';
 import { requireAuth, canAccessHotel, canAccessRestaurant, canAccessAdmin } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-utils';
 
+function buildReportDateFilter(startDate: string | null, endDate: string | null): Record<string, unknown> {
+  const dateFilter: Record<string, unknown> = {};
+  if (!startDate && !endDate) return dateFilter;
+
+  const createdAt: Record<string, unknown> = {};
+  if (startDate) {
+    const start = new Date(startDate);
+    if (!Number.isNaN(start.getTime())) {
+      start.setHours(0, 0, 0, 0);
+      createdAt.gte = start;
+    }
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    if (!Number.isNaN(end.getTime())) {
+      end.setHours(23, 59, 59, 999);
+      createdAt.lte = end;
+    }
+  }
+  if (createdAt.gte || createdAt.lte) {
+    dateFilter.createdAt = createdAt;
+  }
+  return dateFilter;
+}
+
 // GET /api/reports?type=... - Reports based on type
 export async function GET(request: NextRequest) {
   try {
@@ -20,14 +45,7 @@ export async function GET(request: NextRequest) {
       return errorResponse('Report type is required. Valid types: restaurant-daily, restaurant-monthly, hotel-revenue, hotel-occupancy, food-charges-by-room, combined-revenue, admin-summary, order-status');
     }
 
-    // Build date filter
-    const dateFilter: Record<string, unknown> = {};
-    if (startDate || endDate) {
-      const createdAt: Record<string, unknown> = {};
-      if (startDate) createdAt.gte = new Date(startDate);
-      if (endDate) createdAt.lte = new Date(endDate);
-      dateFilter.createdAt = createdAt;
-    }
+    const dateFilter = buildReportDateFilter(startDate, endDate);
 
     switch (type) {
       case 'restaurant-daily':
@@ -61,15 +79,8 @@ async function handleRestaurantDaily(user: { role: string }, dateFilter: Record<
     return errorResponse('Access denied. RESTAURANT_STAFF or ADMIN only.', 403);
   }
 
-  // For daily, use today's date if no date filter
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const orderDateFilter = Object.keys(dateFilter).length > 0
-    ? dateFilter
-    : { createdAt: { gte: today, lt: tomorrow } };
+  const orderDateFilter = dateFilter;
 
   const orders = await db.restaurantOrder.findMany({
     where: {
@@ -124,6 +135,7 @@ async function handleRestaurantDaily(user: { role: string }, dateFilter: Record<
   return successResponse({
     reportType: 'restaurant-daily',
     date: today.toISOString().slice(0, 10),
+    allTime: Object.keys(dateFilter).length === 0,
     totalOrders,
     totalSales,
     averageOrderValue,
@@ -138,14 +150,8 @@ async function handleRestaurantMonthly(user: { role: string }, dateFilter: Recor
     return errorResponse('Access denied. RESTAURANT_STAFF or ADMIN only.', 403);
   }
 
-  // For monthly, default to current month if no date filter
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-  const orderDateFilter = Object.keys(dateFilter).length > 0
-    ? dateFilter
-    : { createdAt: { gte: monthStart, lte: monthEnd } };
+  const orderDateFilter = dateFilter;
 
   const orders = await db.restaurantOrder.findMany({
     where: {
@@ -207,6 +213,7 @@ async function handleRestaurantMonthly(user: { role: string }, dateFilter: Recor
   return successResponse({
     reportType: 'restaurant-monthly',
     month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    allTime: Object.keys(dateFilter).length === 0,
     totalOrders,
     totalSales,
     averageOrderValue,

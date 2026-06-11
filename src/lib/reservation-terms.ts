@@ -29,6 +29,10 @@ export const RESERVATION_POLICIES: { title: string; text: string }[] = [
     title: 'General',
     text: 'Valid NID/Passport/Driving License required at check-in. Non-smoking rooms. Hotel may refuse service for policy violations.',
   },
+  {
+    title: 'Limitation of Liability',
+    text: 'The hotel shall not be responsible for any loss, theft, damage to personal belongings, personal injury, accidents, illness, or any other harm suffered by guests or visitors during their stay, except where required by applicable law. Guests are responsible for safeguarding their personal property and valuables.',
+  },
 ]
 
 export const RESERVATION_TERMS_AND_CONDITIONS = RESERVATION_POLICIES.map(

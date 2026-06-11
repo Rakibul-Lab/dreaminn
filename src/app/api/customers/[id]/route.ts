@@ -42,7 +42,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;
@@ -57,7 +57,8 @@ export async function PUT(
       const emailError = await getEmailValidationError(
         body.email,
         true,
-        body.emailVerificationToken
+        body.emailVerificationToken,
+        { allowUnverifiedMailbox: body.allowUnverifiedMailbox === true }
       );
       if (emailError) return errorResponse(emailError);
     }
@@ -82,6 +83,9 @@ export async function PUT(
     if (body.address !== undefined) updateData.address = body.address;
     if (body.idType !== undefined) updateData.idType = body.idType;
     if (body.idNumber !== undefined) updateData.idNumber = body.idNumber;
+    if (body.visaExpiryDate !== undefined) {
+      updateData.visaExpiryDate = body.visaExpiryDate?.trim() || null;
+    }
     if (body.registrationNumber !== undefined) {
       updateData.registrationNumber = body.registrationNumber?.trim() || null;
     }

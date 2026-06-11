@@ -8,10 +8,15 @@ export function getCompleteReservationMissingFields(guest: {
   address: string
   registrationNumber: string
   idDocumentCount: number
+  idType?: string
+  visaExpiryDate?: string
 }): string[] {
   const missing: string[] = []
   if (!isKnownNationality(guest.nationality)) missing.push('Nationality')
   if (!guest.idNumber.trim()) missing.push('NID / Passport number')
+  if (guest.idType === 'passport' && !guest.visaExpiryDate?.trim()) {
+    missing.push('Visa expiry date')
+  }
   if (!guest.email.trim()) missing.push('Email')
   if (!guest.address.trim()) missing.push('Address')
   if (!guest.registrationNumber.trim()) missing.push('Registration number')
@@ -39,6 +44,8 @@ export function isReservationGuestProfileComplete(
     email?: string | null
     address?: string | null
     registrationNumber?: string | null
+    idType?: string | null
+    visaExpiryDate?: string | null
   },
   idDocumentCount: number
 ): boolean {
@@ -50,6 +57,8 @@ export function isReservationGuestProfileComplete(
       address: customer.address ?? '',
       registrationNumber: customer.registrationNumber ?? '',
       idDocumentCount,
+      idType: customer.idType ?? undefined,
+      visaExpiryDate: customer.visaExpiryDate ?? '',
     }).length === 0
   )
 }

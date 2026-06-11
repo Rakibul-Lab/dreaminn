@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
       request,
       'ADMIN' as RoleType,
       'HOTEL_STAFF' as RoleType,
+      'HOTEL_FD' as RoleType,
       'RESTAURANT_STAFF' as RoleType
     )
     if (authResult instanceof Response) return authResult

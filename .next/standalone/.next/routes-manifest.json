@@ -63,6 +63,54 @@
       "namedRegex": "^/api/bookings/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/company-ledger/bills/[billId]/hotel-clear",
+      "regex": "^/api/company\\-ledger/bills/([^/]+?)/hotel\\-clear(?:/)?$",
+      "routeKeys": {
+        "nxtPbillId": "nxtPbillId"
+      },
+      "namedRegex": "^/api/company\\-ledger/bills/(?<nxtPbillId>[^/]+?)/hotel\\-clear(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/bills/[billId]/payment",
+      "regex": "^/api/company\\-ledger/bills/([^/]+?)/payment(?:/)?$",
+      "routeKeys": {
+        "nxtPbillId": "nxtPbillId"
+      },
+      "namedRegex": "^/api/company\\-ledger/bills/(?<nxtPbillId>[^/]+?)/payment(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/bills/[billId]/restaurant-payment",
+      "regex": "^/api/company\\-ledger/bills/([^/]+?)/restaurant\\-payment(?:/)?$",
+      "routeKeys": {
+        "nxtPbillId": "nxtPbillId"
+      },
+      "namedRegex": "^/api/company\\-ledger/bills/(?<nxtPbillId>[^/]+?)/restaurant\\-payment(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/guests/[guestId]",
+      "regex": "^/api/company\\-ledger/guests/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPguestId": "nxtPguestId"
+      },
+      "namedRegex": "^/api/company\\-ledger/guests/(?<nxtPguestId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/[id]",
+      "regex": "^/api/company\\-ledger/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/company\\-ledger/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/[id]/guests",
+      "regex": "^/api/company\\-ledger/([^/]+?)/guests(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/company\\-ledger/(?<nxtPid>[^/]+?)/guests(?:/)?$"
+    },
+    {
       "page": "/api/customers/[id]",
       "regex": "^/api/customers/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -103,12 +151,28 @@
       "namedRegex": "^/api/restaurant\\-orders/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/api/restaurant-orders/[id]/settle",
+      "regex": "^/api/restaurant\\-orders/([^/]+?)/settle(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/restaurant\\-orders/(?<nxtPid>[^/]+?)/settle(?:/)?$"
+    },
+    {
       "page": "/api/restaurant-orders/[id]/status",
       "regex": "^/api/restaurant\\-orders/([^/]+?)/status(?:/)?$",
       "routeKeys": {
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/restaurant\\-orders/(?<nxtPid>[^/]+?)/status(?:/)?$"
+    },
+    {
+      "page": "/api/restaurant-waiters/[id]",
+      "regex": "^/api/restaurant\\-waiters/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/restaurant\\-waiters/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
       "page": "/api/rooms/[id]",
@@ -127,6 +191,22 @@
       "namedRegex": "^/checkout/(?<nxtPid>[^/]+?)(?:/)?$"
     },
     {
+      "page": "/company-ledger/company/[companyId]",
+      "regex": "^/company\\-ledger/company/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcompanyId": "nxtPcompanyId"
+      },
+      "namedRegex": "^/company\\-ledger/company/(?<nxtPcompanyId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/company-ledger/guest/[guestId]",
+      "regex": "^/company\\-ledger/guest/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPguestId": "nxtPguestId"
+      },
+      "namedRegex": "^/company\\-ledger/guest/(?<nxtPguestId>[^/]+?)(?:/)?$"
+    },
+    {
       "page": "/invoice/[id]",
       "regex": "^/invoice/([^/]+?)(?:/)?$",
       "routeKeys": {
@@ -141,6 +221,14 @@
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/reservation/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/reservations/[id]/edit",
+      "regex": "^/reservations/([^/]+?)/edit(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/reservations/(?<nxtPid>[^/]+?)/edit(?:/)?$"
     }
   ],
   "staticRoutes": [
@@ -199,6 +287,24 @@
       "namedRegex": "^/api/bookings(?:/)?$"
     },
     {
+      "page": "/api/company-ledger",
+      "regex": "^/api/company\\-ledger(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/company\\-ledger(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/cloudview",
+      "regex": "^/api/company\\-ledger/cloudview(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/company\\-ledger/cloudview(?:/)?$"
+    },
+    {
+      "page": "/api/company-ledger/cloudview/hotel-clear-all",
+      "regex": "^/api/company\\-ledger/cloudview/hotel\\-clear\\-all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/company\\-ledger/cloudview/hotel\\-clear\\-all(?:/)?$"
+    },
+    {
       "page": "/api/customers",
       "regex": "^/api/customers(?:/)?$",
       "routeKeys": {},
@@ -211,10 +317,40 @@
       "namedRegex": "^/api/dashboard(?:/)?$"
     },
     {
+      "page": "/api/deposits",
+      "regex": "^/api/deposits(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/deposits(?:/)?$"
+    },
+    {
       "page": "/api/housekeeping",
       "regex": "^/api/housekeeping(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/housekeeping(?:/)?$"
+    },
+    {
+      "page": "/api/housekeeping/cleaning-staff",
+      "regex": "^/api/housekeeping/cleaning\\-staff(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/housekeeping/cleaning\\-staff(?:/)?$"
+    },
+    {
+      "page": "/api/housekeeping/cleaning-staff/list",
+      "regex": "^/api/housekeeping/cleaning\\-staff/list(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/housekeeping/cleaning\\-staff/list(?:/)?$"
+    },
+    {
+      "page": "/api/housekeeping/cleaning-staff/work-history",
+      "regex": "^/api/housekeeping/cleaning\\-staff/work\\-history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/housekeeping/cleaning\\-staff/work\\-history(?:/)?$"
+    },
+    {
+      "page": "/api/housekeeping/staff",
+      "regex": "^/api/housekeeping/staff(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/housekeeping/staff(?:/)?$"
     },
     {
       "page": "/api/inventory",
@@ -289,10 +425,40 @@
       "namedRegex": "^/api/restaurant\\-orders(?:/)?$"
     },
     {
+      "page": "/api/restaurant-orders/dues",
+      "regex": "^/api/restaurant\\-orders/dues(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/restaurant\\-orders/dues(?:/)?$"
+    },
+    {
+      "page": "/api/restaurant-orders/dues/settle-all",
+      "regex": "^/api/restaurant\\-orders/dues/settle\\-all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/restaurant\\-orders/dues/settle\\-all(?:/)?$"
+    },
+    {
+      "page": "/api/restaurant-orders/stats",
+      "regex": "^/api/restaurant\\-orders/stats(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/restaurant\\-orders/stats(?:/)?$"
+    },
+    {
+      "page": "/api/restaurant-orders/stats/today",
+      "regex": "^/api/restaurant\\-orders/stats/today(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/restaurant\\-orders/stats/today(?:/)?$"
+    },
+    {
       "page": "/api/restaurant-tables",
       "regex": "^/api/restaurant\\-tables(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/restaurant\\-tables(?:/)?$"
+    },
+    {
+      "page": "/api/restaurant-waiters",
+      "regex": "^/api/restaurant\\-waiters(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/restaurant\\-waiters(?:/)?$"
     },
     {
       "page": "/api/room-types",
@@ -341,6 +507,30 @@
       "regex": "^/api/users(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/users(?:/)?$"
+    },
+    {
+      "page": "/api/validate-email",
+      "regex": "^/api/validate\\-email(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/validate\\-email(?:/)?$"
+    },
+    {
+      "page": "/api/verify-email/confirm-otp",
+      "regex": "^/api/verify\\-email/confirm\\-otp(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/verify\\-email/confirm\\-otp(?:/)?$"
+    },
+    {
+      "page": "/api/verify-email/send-otp",
+      "regex": "^/api/verify\\-email/send\\-otp(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/verify\\-email/send\\-otp(?:/)?$"
+    },
+    {
+      "page": "/registration-form",
+      "regex": "^/registration\\-form(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/registration\\-form(?:/)?$"
     },
     {
       "page": "/reservations/new",

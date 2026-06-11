@@ -17,6 +17,7 @@ export interface GuestSearchResult {
   address?: string | null
   idType?: string | null
   idNumber?: string | null
+  visaExpiryDate?: string | null
   registrationNumber?: string | null
   nationality?: string | null
 }

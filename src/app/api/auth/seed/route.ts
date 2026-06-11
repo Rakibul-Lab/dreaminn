@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/password';
+import { ensureCloudViewRestaurantLedger } from '@/lib/cloudview-ledger';
+import { ensureDefaultUsers } from '@/lib/ensure-default-users';
 
 export async function POST() {
   try {
     // Check if already seeded
     const userCount = await db.user.count();
     if (userCount > 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Database already seeded. Use reset first.' 
+      const ensured = await ensureDefaultUsers(db);
+      if (ensured.length > 0) {
+        return NextResponse.json({
+          success: true,
+          message: `Added missing default user(s): ${ensured.join(', ')}`,
+          data: { ensured },
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        error: 'Database already seeded. Use reset first.',
       }, { status: 400 });
     }
 
@@ -25,7 +35,7 @@ export async function POST() {
       },
     });
 
-    // Create Hotel Staff
+    // Create Hotel Manager
     const hotelPassword = await hashPassword('hotel123');
     const hotelStaff = await db.user.create({
       data: {
@@ -49,14 +59,14 @@ export async function POST() {
       },
     });
 
-    // Create additional hotel staff
-    const hotelStaff2Password = await hashPassword('hotel123');
+    // Create Hotel F.D. (front desk)
+    const fdPassword = await hashPassword('fd123');
     await db.user.create({
       data: {
-        email: 'reception@erp.com',
-        name: 'Front Desk',
-        password: hotelStaff2Password,
-        role: 'HOTEL_STAFF',
+        email: 'fd@erp.com',
+        name: 'Hotel Front Desk',
+        password: fdPassword,
+        role: 'HOTEL_FD',
         phone: '+8801733333333',
       },
     });
@@ -272,6 +282,8 @@ export async function POST() {
       { name: 'Detergent', category: 'Housekeeping', unit: 'liter', quantity: 20, minQuantity: 5, costPerUnit: 250 },
     ];
     await db.inventoryItem.createMany({ data: inventoryItems });
+
+    await ensureCloudViewRestaurantLedger(db);
 
     return NextResponse.json({
       success: true,

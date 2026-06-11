@@ -335,20 +335,36 @@ export async function verifyEmailOnServer(email: string): Promise<ServerEmailVer
   return inconclusiveResult(domain, isGmail, isExternalEmailVerifierConfigured())
 }
 
+export type EmailValidationPolicy = {
+  /** Reservation guest emails: warn if mailbox missing but do not block save. */
+  allowUnverifiedMailbox?: boolean
+}
+
+function isSoftMailboxPolicy(result: ServerEmailVerifyResult, allowSoft: boolean): boolean {
+  return allowSoft && result.formatValid && result.domainValid
+}
+
 /** Returns an error message when invalid, or null when OK. */
 export async function getEmailValidationError(
   email: string | null | undefined,
   optional = false,
-  verificationToken?: string | null
+  verificationToken?: string | null,
+  policy?: EmailValidationPolicy
 ): Promise<string | null> {
   const trimmed = email?.trim() ?? ''
   if (!trimmed) {
     return optional ? null : 'Email is required'
   }
 
+  const allowSoft = policy?.allowUnverifiedMailbox === true
   const result = await verifyEmailOnServer(trimmed)
+
+  if (!result.formatValid || !result.domainValid) {
+    return result.message || 'Enter a valid email address'
+  }
+
   if (result.mailboxExists === false) {
-    return result.message
+    return isSoftMailboxPolicy(result, allowSoft) ? null : result.message
   }
 
   if (result.mailboxExists === true) {
@@ -359,11 +375,16 @@ export async function getEmailValidationError(
     const { isEmailVerificationTokenValid } = await import('./email-otp')
     const ok = await isEmailVerificationTokenValid(trimmed, verificationToken)
     if (ok) return null
+    if (allowSoft) return null
     return 'Email must be verified with the code sent to the inbox'
   }
 
   if (result.needsOtp) {
-    return 'Verify this email with the code sent to the inbox'
+    return allowSoft ? null : 'Verify this email with the code sent to the inbox'
+  }
+
+  if (allowSoft) {
+    return null
   }
 
   return result.message || 'Could not verify that this email exists'

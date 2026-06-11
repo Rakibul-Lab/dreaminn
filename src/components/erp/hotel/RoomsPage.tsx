@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { FileDown, Grid3X3, List, Loader2, Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, canManageRoomInventory, isHotelFrontDesk } from '@/lib/auth-store';
 import { downloadRoomsPdf, type RoomExportRecord } from '@/lib/rooms-export';
 
 const ROOMS_PER_ROW = 8;
@@ -62,6 +62,8 @@ interface HousekeepingTaskLite {
 export function RoomsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const canManageRooms = canManageRoomInventory(user?.role);
+  const isStatusOnly = isHotelFrontDesk(user?.role);
   const FLOOR_OPTIONS = [8, 9, 10];
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -158,6 +160,11 @@ export function RoomsPage() {
   };
 
   const handleSubmit = () => {
+    if (editRoom && isStatusOnly) {
+      updateMutation.mutate({ id: editRoom.id, status: formStatus });
+      return;
+    }
+
     if (!formRoomNumber || !formTypeId) {
       toast.error('Room number and type are required');
       return;
@@ -309,10 +316,12 @@ export function RoomsPage() {
             )}
             Export PDF
           </Button>
-          <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Room
-          </Button>
+          {canManageRooms && (
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Room
+            </Button>
+          )}
         </div>
       </div>
 
@@ -462,7 +471,7 @@ export function RoomsPage() {
                   <td className="p-3"><StatusBadge status={displayStatus} /></td>
                   <td className="p-3">
                     <Button variant="ghost" size="sm" onClick={() => openEditDialog(room)}>
-                      Edit
+                      {isStatusOnly ? 'Change status' : 'Edit'}
                     </Button>
                   </td>
                 </tr>
@@ -478,59 +487,95 @@ export function RoomsPage() {
       <Dialog open={addDialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editRoom ? 'Edit Room' : 'Add New Room'}</DialogTitle>
+            <DialogTitle>
+              {editRoom
+                ? isStatusOnly
+                  ? 'Change Room Status'
+                  : 'Edit Room'
+                : 'Add New Room'}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Room Number</Label>
-              <Input
-                value={formRoomNumber}
-                onChange={(e) => setFormRoomNumber(e.target.value)}
-                placeholder="e.g. 101"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Floor</Label>
-              <Select value={formFloor} onValueChange={setFormFloor}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {FLOOR_OPTIONS.map((f) => (
-                    <SelectItem key={f} value={String(f)}>Floor {f}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Room Type</Label>
-              <Select value={formTypeId} onValueChange={setFormTypeId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roomTypes.map((rt: RoomType) => (
-                    <SelectItem key={rt.id} value={rt.id}>{rt.name} - ৳{rt.basePrice}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {editRoom && (
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={formStatus} onValueChange={setFormStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AVAILABLE">Available</SelectItem>
-                    <SelectItem value="RESERVED">Reserved</SelectItem>
-                    <SelectItem value="OCCUPIED">Occupied</SelectItem>
-                    <SelectItem value="CLEANING">Cleaning</SelectItem>
-                    <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {editRoom && isStatusOnly ? (
+              <>
+                <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
+                  <p><span className="text-muted-foreground">Room:</span> {formRoomNumber}</p>
+                  <p><span className="text-muted-foreground">Floor:</span> {formFloor}</p>
+                  <p>
+                    <span className="text-muted-foreground">Type:</span>{' '}
+                    {roomTypes.find((rt: RoomType) => rt.id === formTypeId)?.name ?? '—'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={formStatus} onValueChange={setFormStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AVAILABLE">Available</SelectItem>
+                      <SelectItem value="RESERVED">Reserved</SelectItem>
+                      <SelectItem value="OCCUPIED">Occupied</SelectItem>
+                      <SelectItem value="CLEANING">Cleaning</SelectItem>
+                      <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Room Number</Label>
+                  <Input
+                    value={formRoomNumber}
+                    onChange={(e) => setFormRoomNumber(e.target.value)}
+                    placeholder="e.g. 101"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Floor</Label>
+                  <Select value={formFloor} onValueChange={setFormFloor}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FLOOR_OPTIONS.map((f) => (
+                        <SelectItem key={f} value={String(f)}>Floor {f}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Room Type</Label>
+                  <Select value={formTypeId} onValueChange={setFormTypeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roomTypes.map((rt: RoomType) => (
+                        <SelectItem key={rt.id} value={rt.id}>{rt.name} - ৳{rt.basePrice}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editRoom && (
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={formStatus} onValueChange={setFormStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AVAILABLE">Available</SelectItem>
+                        <SelectItem value="RESERVED">Reserved</SelectItem>
+                        <SelectItem value="OCCUPIED">Occupied</SelectItem>
+                        <SelectItem value="CLEANING">Cleaning</SelectItem>
+                        <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter>
@@ -540,7 +585,13 @@ export function RoomsPage() {
               onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
             >
-              {(createMutation.isPending || updateMutation.isPending) ? 'Saving...' : editRoom ? 'Update' : 'Create'}
+              {(createMutation.isPending || updateMutation.isPending)
+                ? 'Saving...'
+                : editRoom
+                  ? isStatusOnly
+                    ? 'Update status'
+                    : 'Update'
+                  : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,10 +4,11 @@ import { requireRole } from '@/lib/auth';
 import { successResponse, paginatedResponse, errorResponse, logActivity } from '@/lib/api-utils';
 import { Prisma, RoleType } from '@prisma/client';
 import { getEmailValidationError } from '@/lib/email-verify-server';
+import { ensureCloudViewRestaurantLedger } from '@/lib/cloudview-ledger';
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const { searchParams } = new URL(request.url);
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    await ensureCloudViewRestaurantLedger(db);
+
     const [companies, total] = await Promise.all([
       db.companyLedger.findMany({
         where,
@@ -53,7 +56,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const body = await request.json();

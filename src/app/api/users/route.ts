@@ -78,9 +78,9 @@ export async function POST(request: NextRequest) {
     );
     if (emailError) return errorResponse(emailError);
 
-    const validRoles = ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'];
+    const validRoles = ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD', 'RESTAURANT_STAFF'];
     if (!validRoles.includes(role)) {
-      return errorResponse('Invalid role. Must be ADMIN, HOTEL_STAFF, or RESTAURANT_STAFF');
+      return errorResponse('Invalid role. Must be ADMIN, HOTEL_STAFF, HOTEL_FD, or RESTAURANT_STAFF');
     }
 
     const existing = await db.user.findUnique({ where: { email } });
@@ -155,7 +155,13 @@ export async function PUT(request: NextRequest) {
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
-    if (role !== undefined) updateData.role = role;
+    if (role !== undefined) {
+      const validRoles = ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD', 'RESTAURANT_STAFF'];
+      if (!validRoles.includes(role)) {
+        return errorResponse('Invalid role. Must be ADMIN, HOTEL_STAFF, HOTEL_FD, or RESTAURANT_STAFF');
+      }
+      updateData.role = role;
+    }
     if (phone !== undefined) updateData.phone = phone;
     if (avatar !== undefined) updateData.avatar = avatar;
     if (active !== undefined) updateData.active = active;

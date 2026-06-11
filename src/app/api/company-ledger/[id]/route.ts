@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;
@@ -61,12 +61,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
-    if (authResult instanceof Response) return authResult;
-
     const { id } = await params;
     const existing = await db.companyLedger.findUnique({ where: { id } });
     if (!existing) return notFoundResponse('Company ledger');
+
+    const authResult = existing.isSystem
+      ? requireRole(request, 'ADMIN' as RoleType)
+      : requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
+    if (authResult instanceof Response) return authResult;
 
     const body = await request.json();
     const name = body?.name !== undefined ? String(body.name).trim() : existing.name;
@@ -121,12 +123,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType);
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType);
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;
     const existing = await db.companyLedger.findUnique({ where: { id } });
     if (!existing) return notFoundResponse('Company ledger');
+    if (existing.isSystem) {
+      return errorResponse('System ledgers cannot be deleted', 403);
+    }
 
     await db.companyLedger.delete({ where: { id } });
 

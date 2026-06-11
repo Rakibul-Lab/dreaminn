@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF');
+    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF', 'HOTEL_FD');
     if (authResult instanceof Response) return authResult;
 
     const { id } = await params;
@@ -112,7 +112,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF');
+    const authResult = requireRole(request, 'ADMIN', 'HOTEL_STAFF', 'HOTEL_FD');
     if (authResult instanceof Response) return authResult;
 
     const user = authResult;

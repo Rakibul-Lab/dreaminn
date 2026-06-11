@@ -7,6 +7,10 @@ import {
 } from './reservation-terms'
 import type { ReservationPdfData } from './reservation-pdf-data'
 import { bookingVatOptions, computeRoomBookingTotals } from './booking-totals'
+import {
+  formatVisaExpiryForDocument,
+  reservationVisaExpiryLabel,
+} from './reservation-field-placeholders'
 
 function idTypeLabel(type?: string | null) {
   if (type === 'passport') return 'Passport'
@@ -72,6 +76,14 @@ export async function buildReservationDocumentHtml(data: ReservationPdfData): Pr
       </section>`
     : ''
 
+  const visaLabel =
+    data.idType === 'passport'
+      ? reservationVisaExpiryLabel(data.idType, data.visaExpiryDate)
+      : null
+  const visaExpiryHtml = visaLabel
+    ? `<p style="margin:0"><span style="color:#64748b">Visa expiry date:</span> ${esc(visaLabel)}</p>`
+    : ''
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -117,7 +129,8 @@ export async function buildReservationDocumentHtml(data: ReservationPdfData): Pr
         ${data.guestNationality ? `<p style="margin:0 0 4px"><span style="color:#64748b">Nationality:</span> ${esc(data.guestNationality)}</p>` : ''}
         ${data.guestRegistrationNumber ? `<p style="margin:0 0 4px"><span style="color:#64748b">Registration no.:</span> ${esc(data.guestRegistrationNumber)}</p>` : ''}
         <p style="margin:0 0 4px"><span style="color:#64748b">ID:</span> ${esc(idTypeLabel(data.idType))}</p>
-        ${data.idNumber ? `<p style="margin:0"><span style="color:#64748b">ID no.:</span> ${esc(data.idNumber)}</p>` : ''}
+        ${data.idNumber ? `<p style="margin:0 0 4px"><span style="color:#64748b">ID no.:</span> ${esc(data.idNumber)}</p>` : ''}
+        ${visaExpiryHtml}
       </div>
       <div>
         <h3 style="font-size:14px;font-weight:600;color:#334155;margin:0 0 8px">Stay details</h3>
@@ -131,7 +144,7 @@ export async function buildReservationDocumentHtml(data: ReservationPdfData): Pr
 
     <section style="border-radius:8px;background:#fffbeb;border:1px solid #fde68a;padding:16px;font-size:13px;margin-bottom:24px">
       <h3 style="font-size:14px;font-weight:600;color:#334155;margin:0 0 8px">Charges (BDT)</h3>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Room charge</span><span>৳${data.totalRoomCharge.toLocaleString()}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Room rent</span><span>৳${data.totalRoomCharge.toLocaleString()}</span></div>
       ${vatRow}
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Advance paid</span><span>৳${data.advancePayment.toLocaleString()}</span></div>
       <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Form of payment</span><span>${esc(data.formOfPayment || 'Not paid at booking')}</span></div>

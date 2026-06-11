@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const authResult = requireAuth(request);
     if (authResult instanceof Response) return authResult;
 
-    if (authResult.role !== 'ADMIN' && authResult.role !== 'HOTEL_STAFF') {
+    if (authResult.role !== 'ADMIN' && authResult.role !== 'HOTEL_STAFF' && authResult.role !== 'HOTEL_FD') {
       return errorResponse('Only hotel staff can settle all restaurant dues in bulk', 403);
     }
 

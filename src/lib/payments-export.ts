@@ -22,6 +22,7 @@ export type PaymentExportRecord = {
   amount: number
   method: string
   paymentType: string
+  settlementSource?: string | null
   reference?: string | null
   accountLastFour?: string | null
   notes?: string | null
@@ -83,6 +84,7 @@ export function paymentsExportFileName(): string {
 export function buildPaymentsExportQuery(
   filters: {
     paymentType?: string
+    settlementSource?: string
     method?: string
     dateFrom?: string
     dateTo?: string
@@ -92,7 +94,9 @@ export function buildPaymentsExportQuery(
   const params = new URLSearchParams()
   params.set('page', '1')
   params.set('limit', String(limit))
-  if (filters.paymentType && filters.paymentType !== 'all') {
+  if (filters.settlementSource && filters.settlementSource !== 'all') {
+    params.set('settlementSource', filters.settlementSource)
+  } else if (filters.paymentType && filters.paymentType !== 'all') {
     params.set('paymentType', filters.paymentType)
   }
   if (filters.method && filters.method !== 'all') {

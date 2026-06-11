@@ -7,10 +7,8 @@ import { useAuthStore, canAccessHotel, canAccessRestaurant, canAccessAdmin } fro
 import { useToast } from '@/hooks/use-toast'
 import { format } from 'date-fns'
 import {
-  CreditCard, Plus, Filter, RefreshCw, Wallet, TrendingUp, Calendar, CalendarRange, FileDown, Loader2, UtensilsCrossed
+  CreditCard, Plus, Filter, RefreshCw, Wallet, TrendingUp, Calendar, CalendarRange, FileDown, Loader2, Landmark, AlertCircle
 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RestaurantDuesPanel } from './RestaurantDuesPanel'
 import {
   BOOKING_DATE_PRESET_OPTIONS,
   resolveBookingDateRange,
@@ -48,6 +46,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { getPaginationPages } from '@/lib/pagination-pages'
 import { cn } from '@/lib/utils'
+import { openCloudViewRestaurantLedgerTab } from '@/lib/company-ledger-navigation'
+import { formatRestaurantPaymentSourceLabel } from '@/lib/restaurant-order-settle'
+
+type RestaurantSourceFilter = 'all' | 'HOTEL_DUE' | 'RESTAURANT_DIRECT'
 
 interface Payment {
   id: string
@@ -82,13 +84,6 @@ interface Booking {
   room: { id: string; roomNumber: string; type: { name: string } }
 }
 
-interface RestaurantOrder {
-  id: string
-  orderNumber: string
-  orderType: string
-  totalAmount: number
-}
-
 const paymentTypeColors: Record<string, string> = {
   ADVANCE: 'bg-amber-50 text-amber-700 border-amber-200',
   INITIAL: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -106,18 +101,17 @@ export default function PaymentsPage() {
   const isHotel = canAccessHotel(user?.role) && !canAccessRestaurant(user?.role)
   const isRestaurant = canAccessRestaurant(user?.role) && !canAccessHotel(user?.role)
   const isAdmin = canAccessAdmin(user?.role)
-  const showRestaurantPaymentsOnly = isRestaurant && !isAdmin
+  const canRecordPayment = isHotel || isAdmin
 
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all')
+  const [restaurantSourceFilter, setRestaurantSourceFilter] =
+    useState<RestaurantSourceFilter>('all')
   const [methodFilter, setMethodFilter] = useState<string>('all')
   const [datePreset, setDatePreset] = useState<BookingDatePreset>('today')
   const [customDateFrom, setCustomDateFrom] = useState('')
   const [customDateTo, setCustomDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [activeTab, setActiveTab] = useState(
-    showRestaurantPaymentsOnly ? 'restaurant-dues' : 'records'
-  )
   const [exporting, setExporting] = useState(false)
   const [showNewPaymentDialog, setShowNewPaymentDialog] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
@@ -178,7 +172,13 @@ export default function PaymentsPage() {
     const params = new URLSearchParams()
     params.set('page', String(p))
     params.set('limit', String(limit))
-    if (paymentTypeFilter !== 'all') params.set('paymentType', paymentTypeFilter)
+    if (isRestaurant) {
+      if (restaurantSourceFilter !== 'all') {
+        params.set('settlementSource', restaurantSourceFilter)
+      }
+    } else if (paymentTypeFilter !== 'all') {
+      params.set('paymentType', paymentTypeFilter)
+    }
     if (methodFilter !== 'all') params.set('method', methodFilter)
     if (dateRange.dateFrom) params.set('startDate', dateRange.dateFrom)
     if (dateRange.dateTo) params.set('endDate', dateRange.dateTo)
@@ -198,7 +198,17 @@ export default function PaymentsPage() {
 
   // Fetch payments
   const { data: paymentsData, isLoading } = useQuery({
-    queryKey: ['payments', paymentTypeFilter, methodFilter, datePreset, customDateFrom, customDateTo, page, pageSize],
+    queryKey: [
+      'payments',
+      isRestaurant ? restaurantSourceFilter : paymentTypeFilter,
+      methodFilter,
+      datePreset,
+      customDateFrom,
+      customDateTo,
+      page,
+      pageSize,
+      isRestaurant,
+    ],
     queryFn: async () => {
       const res = await api.get<{
         success: boolean
@@ -228,6 +238,24 @@ export default function PaymentsPage() {
     enabled: !!user,
   })
 
+  const { data: settlementMeta } = useQuery({
+    queryKey: ['cloudview-ledger', 'payments-hint'],
+    queryFn: () =>
+      api.get<{
+        success: boolean
+        data?: {
+          meta?: {
+            openCount: number
+            hotelClearedCount: number
+            totalOpenDue: number
+            totalClearedDue: number
+          }
+        }
+      }>('/company-ledger/cloudview?sort=newest'),
+    enabled: !!user && (isRestaurant || isAdmin),
+    select: (res) => res?.data?.meta,
+  })
+
   // Fetch bookings for payment dialog
   const { data: bookingsData } = useQuery({
     queryKey: ['bookings-for-payment'],
@@ -236,16 +264,6 @@ export default function PaymentsPage() {
       return res
     },
     enabled: showNewPaymentDialog && (isHotel || isAdmin),
-  })
-
-  // Fetch restaurant orders for payment dialog
-  const { data: ordersData } = useQuery({
-    queryKey: ['orders-for-payment'],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: RestaurantOrder[] }>('/restaurant-orders?limit=50&status=DELIVERED')
-      return res
-    },
-    enabled: showNewPaymentDialog && (isRestaurant || isAdmin),
   })
 
   // Create payment mutation
@@ -260,13 +278,11 @@ export default function PaymentsPage() {
         notes: paymentForm.notes || null,
       }
       if (paymentForm.bookingId) payload.bookingId = paymentForm.bookingId
-      if (paymentForm.orderId) payload.orderId = paymentForm.orderId
       return api.post('/payments', payload)
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['payments'] })
       queryClient.invalidateQueries({ queryKey: ['payments-summary'] })
-      queryClient.invalidateQueries({ queryKey: ['restaurant-dues'] })
       toast({ title: 'Payment Recorded', description: res.message || 'Payment recorded successfully' })
       setShowNewPaymentDialog(false)
       resetPaymentForm()
@@ -288,7 +304,8 @@ export default function PaymentsPage() {
     setExporting(true)
     try {
       const url = buildPaymentsExportQuery({
-        paymentType: paymentTypeFilter,
+        paymentType: isRestaurant ? undefined : paymentTypeFilter,
+        settlementSource: isRestaurant ? restaurantSourceFilter : undefined,
         method: methodFilter,
         dateFrom: dateRange.dateFrom,
         dateTo: dateRange.dateTo,
@@ -304,7 +321,7 @@ export default function PaymentsPage() {
         datePreset,
         customDateFrom,
         customDateTo,
-        paymentType: paymentTypeFilter,
+        paymentType: isRestaurant ? restaurantSourceFilter : paymentTypeFilter,
         method: methodFilter,
       })
       toast({ title: 'Exported', description: 'Payments PDF downloaded' })
@@ -329,56 +346,74 @@ export default function PaymentsPage() {
             Payments
           </h2>
           <p className="text-muted-foreground text-sm mt-1">
-            {isHotel
-              ? 'Hotel booking payments and restaurant due settlement'
-              : showRestaurantPaymentsOnly
-                ? 'Your restaurant receipts and hotel due settlements'
-                : 'All payment records'}
+            {isRestaurant
+              ? 'Hotel settlements and order payments from delivered orders'
+              : isHotel
+                ? 'Hotel booking payments and restaurant payments on guest folios / company ledger'
+                : 'Payment records for hotel and restaurant'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {activeTab === 'records' && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => void handleExportPdf()}
-                disabled={exporting || isLoading}
-              >
-                {exporting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileDown className="h-4 w-4 mr-2" />
-                )}
-                Export PDF
-              </Button>
-              <Button
-                onClick={() => setShowNewPaymentDialog(true)}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Record Payment
-              </Button>
-            </>
+          <Button
+            variant="outline"
+            onClick={() => void handleExportPdf()}
+            disabled={exporting || isLoading}
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4 mr-2" />
+            )}
+            Export PDF
+          </Button>
+          {canRecordPayment && (
+            <Button
+              onClick={() => setShowNewPaymentDialog(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Record Payment
+            </Button>
           )}
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="records">
-            {showRestaurantPaymentsOnly ? 'My restaurant payments' : 'Payment records'}
-          </TabsTrigger>
-          <TabsTrigger value="restaurant-dues">
-            <UtensilsCrossed className="h-4 w-4 mr-1.5" />
-            Restaurant due
-          </TabsTrigger>
-        </TabsList>
+      {(isRestaurant || isAdmin) && settlementMeta && (
+        settlementMeta.openCount > 0 || settlementMeta.hotelClearedCount > 0
+      ) && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                {settlementMeta.openCount > 0 && (
+                  <p className="text-amber-900">
+                    {settlementMeta.openCount} order{settlementMeta.openCount === 1 ? '' : 's'} awaiting hotel clearance
+                    (৳{settlementMeta.totalOpenDue.toLocaleString()}).
+                  </p>
+                )}
+                {settlementMeta.hotelClearedCount > 0 && (
+                  <p className={settlementMeta.openCount > 0 ? 'text-sky-800 mt-1' : 'text-sky-800'}>
+                    {settlementMeta.hotelClearedCount} order{settlementMeta.hotelClearedCount === 1 ? '' : 's'} ready to record payment
+                    (৳{settlementMeta.totalClearedDue.toLocaleString()}) — open CloudView Restaurant ledger.
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-amber-300"
+              onClick={() => openCloudViewRestaurantLedgerTab()}
+            >
+              <Landmark className="h-4 w-4 mr-2" />
+              Open ledger
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="restaurant-dues" className="mt-4">
-          <RestaurantDuesPanel />
-        </TabsContent>
-
-        <TabsContent value="records" className="mt-4 space-y-4">
+      <div className="space-y-4">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
@@ -473,26 +508,46 @@ export default function PaymentsPage() {
                 </div>
               </>
             )}
-            <Select
-              value={paymentTypeFilter}
-              onValueChange={(v) => {
-                setPaymentTypeFilter(v)
-                setPage(1)
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Payment type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="ADVANCE">Advance</SelectItem>
-                <SelectItem value="INITIAL">Initial</SelectItem>
-                <SelectItem value="FINAL">Final</SelectItem>
-                <SelectItem value="PARTIAL">Partial</SelectItem>
-                {(isRestaurant || isAdmin) && <SelectItem value="RESTAURANT">Restaurant</SelectItem>}
-              </SelectContent>
-            </Select>
+            {isRestaurant ? (
+              <Select
+                value={restaurantSourceFilter}
+                onValueChange={(v) => {
+                  setRestaurantSourceFilter(v as RestaurantSourceFilter)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-52">
+                  <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  <SelectItem value="HOTEL_DUE">Hotel settlement</SelectItem>
+                  <SelectItem value="RESTAURANT_DIRECT">Order payment</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <Select
+                value={paymentTypeFilter}
+                onValueChange={(v) => {
+                  setPaymentTypeFilter(v)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-48">
+                  <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Payment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="ADVANCE">Advance</SelectItem>
+                  <SelectItem value="INITIAL">Initial</SelectItem>
+                  <SelectItem value="FINAL">Final</SelectItem>
+                  <SelectItem value="PARTIAL">Partial</SelectItem>
+                  <SelectItem value="RESTAURANT">Restaurant</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Select
               value={methodFilter}
               onValueChange={(v) => {
@@ -534,13 +589,13 @@ export default function PaymentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead>{isRestaurant ? 'Source' : 'Type'}</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Reference</TableHead>
                   <TableHead>Last 4</TableHead>
                   <TableHead>Notes</TableHead>
-                  <TableHead>Rooms</TableHead>
+                  <TableHead>Room / Order</TableHead>
                   <TableHead>Received By</TableHead>
                 </TableRow>
               </TableHeader>
@@ -566,9 +621,22 @@ export default function PaymentsPage() {
                         {format(new Date(payment.createdAt), 'MMM dd, yyyy HH:mm')}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={paymentTypeColors[payment.paymentType] || ''}>
-                          {payment.paymentType}
-                        </Badge>
+                        {isRestaurant ? (
+                          <Badge
+                            variant="outline"
+                            className={
+                              payment.settlementSource === 'HOTEL_DUE'
+                                ? 'bg-sky-50 text-sky-800 border-sky-200'
+                                : 'bg-purple-50 text-purple-800 border-purple-200'
+                            }
+                          >
+                            {formatRestaurantPaymentSourceLabel(payment.settlementSource)}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={paymentTypeColors[payment.paymentType] || ''}>
+                            {payment.paymentType}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">{formatPaymentMethod(payment.method)}</TableCell>
                       <TableCell className="text-right font-semibold text-emerald-600">
@@ -584,9 +652,15 @@ export default function PaymentsPage() {
                         {payment.notes || '—'}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {payment.booking?.room?.roomNumber ? (
-                          <span>Room {payment.booking.room.roomNumber}</span>
-                        ) : (
+                        {payment.booking?.room?.roomNumber && (
+                          <div>Room {payment.booking.room.roomNumber}</div>
+                        )}
+                        {payment.order?.orderNumber && (
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {payment.order.orderNumber}
+                          </div>
+                        )}
+                        {!payment.booking?.room?.roomNumber && !payment.order?.orderNumber && (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
@@ -678,8 +752,7 @@ export default function PaymentsPage() {
           </div>
         </CardContent>
       </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* New Payment Dialog */}
       <Dialog open={showNewPaymentDialog} onOpenChange={setShowNewPaymentDialog}>
@@ -701,13 +774,12 @@ export default function PaymentsPage() {
                       <SelectItem value="PARTIAL">Partial</SelectItem>
                     </>
                   )}
-                  {(isRestaurant || isAdmin) && <SelectItem value="RESTAURANT">Restaurant</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
 
             {/* Show booking selector for hotel payments */}
-            {(isHotel || isAdmin) && !['RESTAURANT'].includes(paymentForm.paymentType) && (
+            {(isHotel || isAdmin) && (
               <div>
                 <Label>Select Booking (Hotel)</Label>
                 <Select value={paymentForm.bookingId} onValueChange={(v) => setPaymentForm((f) => ({ ...f, bookingId: v }))}>
@@ -716,23 +788,6 @@ export default function PaymentsPage() {
                     {bookingsData?.data?.map((b) => (
                       <SelectItem key={b.id} value={b.id}>
                         {b.customer?.name} - Room {b.room?.roomNumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Show order selector for restaurant payments */}
-            {(isRestaurant || isAdmin) && paymentForm.paymentType === 'RESTAURANT' && (
-              <div>
-                <Label>Select Order (Restaurant)</Label>
-                <Select value={paymentForm.orderId} onValueChange={(v) => setPaymentForm((f) => ({ ...f, orderId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Choose an order" /></SelectTrigger>
-                  <SelectContent>
-                    {ordersData?.data?.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.orderNumber} - ৳{o.totalAmount.toLocaleString()}
                       </SelectItem>
                     ))}
                   </SelectContent>

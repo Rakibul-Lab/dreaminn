@@ -15,6 +15,7 @@ export type EmailInputProps = Omit<React.ComponentProps<typeof Input>, 'type' | 
   onChange: (value: string) => void
   optional?: boolean
   mode?: 'full' | 'format-only'
+  allowUnverifiedMailbox?: boolean
   showMessage?: boolean
   onValidationChange?: (
     result: EmailValidationResult & {
@@ -29,13 +30,14 @@ export function EmailInput({
   onChange,
   optional = false,
   mode = 'full',
+  allowUnverifiedMailbox = false,
   showMessage = true,
   onValidationChange,
   className,
   id,
   ...props
 }: EmailInputProps) {
-  const validation = useEmailValidation({ email: value, optional, mode })
+  const validation = useEmailValidation({ email: value, optional, mode, allowUnverifiedMailbox })
   const onValidationChangeRef = React.useRef(onValidationChange)
   onValidationChangeRef.current = onValidationChange
 
@@ -82,6 +84,7 @@ export function EmailInput({
     validation.status !== 'idle'
 
   const showOtp =
+    !allowUnverifiedMailbox &&
     mode === 'full' &&
     !(optional && !value.trim()) &&
     validation.needsOtp &&

@@ -13,8 +13,14 @@ type Tx = Omit<
 >
 
 export function resolveRestaurantSettlementSource(role: RoleType): RestaurantSettlementSource {
-  if (role === 'HOTEL_STAFF') return 'HOTEL_DUE'
+  if (role === 'HOTEL_STAFF' || role === 'HOTEL_FD') return 'HOTEL_DUE'
   return 'RESTAURANT_DIRECT'
+}
+
+export function formatRestaurantPaymentSourceLabel(source?: string | null): string {
+  if (source === 'HOTEL_DUE') return 'Hotel settlement'
+  if (source === 'RESTAURANT_DIRECT') return 'Order payment'
+  return 'Restaurant'
 }
 
 export function formatRestaurantSettlementSource(
@@ -29,7 +35,9 @@ export function formatRestaurantSettlementSource(
     const by = receiver?.name ? ` — received by ${receiver.name}` : ''
     return `Restaurant direct${by}`
   }
-  if (receiver?.role === 'HOTEL_STAFF') return `Hotel due settlement by ${receiver.name}`
+  if (receiver?.role === 'HOTEL_STAFF' || receiver?.role === 'HOTEL_FD') {
+    return `Hotel due settlement by ${receiver.name}`
+  }
   if (receiver?.name) return `Received by ${receiver.name}`
   return 'Restaurant payment'
 }
@@ -75,6 +83,8 @@ export async function settleRestaurantOrderInTx(
     status: string
     totalAmount: number
     bookingId: string | null
+    billingDisposition?: string | null
+    companyLedgerBill?: { id: string } | null
     payments: { amount: number; paymentType: string }[]
   },
   input: SettleOrderInput
@@ -82,8 +92,11 @@ export async function settleRestaurantOrderInTx(
   if (order.status === 'CANCELLED') {
     throw new Error('Cannot settle a cancelled order')
   }
-  if (!['DELIVERED', 'READY'].includes(order.status)) {
-    throw new Error('Only delivered or ready orders can be settled')
+  if (order.status !== 'DELIVERED') {
+    throw new Error('Only delivered orders can be paid')
+  }
+  if (order.billingDisposition === 'HOTEL_BILL' || order.companyLedgerBill) {
+    throw new Error('This order was sent to hotel billing and cannot be paid here')
   }
 
   const { dueAmount } = computeOrderDue(order.totalAmount, order.payments)
@@ -135,8 +148,16 @@ export async function settleRestaurantOrderInTx(
     }
   }
 
+  const remainingDue = Math.max(0, dueAmount - input.amount)
+  if (remainingDue <= 0.009 && input.settlementSource === 'RESTAURANT_DIRECT') {
+    await tx.restaurantOrder.update({
+      where: { id: order.id },
+      data: { billingDisposition: 'PAID_DIRECT' },
+    })
+  }
+
   return {
     payment,
-    remainingDue: Math.max(0, dueAmount - input.amount),
+    remainingDue,
   }
 }

@@ -30,7 +30,22 @@ import {
   FileDown,
   Loader2,
   ArrowUpDown,
+  Building2,
+  Wallet,
+  Printer,
 } from 'lucide-react'
+import {
+  canPayOrderDirectly,
+  canSendOrderToHotel,
+  formatOrderBillingState,
+  resolveOrderBillingState,
+} from '@/lib/restaurant-order-billing'
+import { computeOrderDue } from '@/lib/restaurant-order-dues'
+import {
+  PAYMENT_METHOD_OPTIONS_WITH_PAYMENT,
+  paymentRequiresReference,
+} from '@/lib/payment-method'
+import { openRestaurantReceiptTab } from '@/lib/restaurant-receipt-navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,9 +64,11 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -92,9 +109,12 @@ interface RestaurantOrder {
   vatAmount: number
   vatPercent: number
   totalAmount: number
+  billingDisposition?: 'PENDING' | 'HOTEL_BILL' | 'PAID_DIRECT'
   notes: string | null
   createdAt: string
   items: OrderItem[]
+  payments?: { amount: number; paymentType: string; settlementSource?: string | null }[]
+  companyLedgerBill?: { id: string } | null
   room: { id: string; roomNumber: string; status: string } | null
   table: { id: string; tableNumber: string; capacity: number; status: string } | null
   creator: { id: string; name: string; email: string } | null
@@ -159,6 +179,10 @@ export default function OrdersPage() {
   const [customDateTo, setCustomDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState<OrderSort>('newest')
   const [exporting, setExporting] = useState(false)
+  const [payOrder, setPayOrder] = useState<RestaurantOrder | null>(null)
+  const [payMethod, setPayMethod] = useState('CASH')
+  const [payReference, setPayReference] = useState('')
+  const [payNotes, setPayNotes] = useState('')
 
   const dateRange = useMemo(
     () => resolveBookingDateRange(datePreset, customDateFrom, customDateTo),
@@ -242,6 +266,127 @@ export default function OrdersPage() {
       toast.error('Failed to update order status', { description: error.message })
     },
   })
+
+  const sendToHotelMutation = useMutation({
+    mutationFn: (orderId: string) =>
+      api.post(`/restaurant-orders/${orderId}/send-to-hotel`, {}),
+    onSuccess: (res: { success?: boolean; message?: string; error?: string }) => {
+      if (!res?.success) {
+        toast.error(res?.error || 'Failed to send to hotel')
+        return
+      }
+      toast.success(res.message || 'Order sent to hotel billing')
+      queryClient.invalidateQueries({ queryKey: ['restaurant-orders'] })
+      queryClient.invalidateQueries({ queryKey: ['cloudview-ledger'] })
+      queryClient.invalidateQueries({ queryKey: ['company-ledger'] })
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to send to hotel', { description: error.message })
+    },
+  })
+
+  const payMutation = useMutation({
+    mutationFn: (payload: {
+      orderId: string
+      method: string
+      reference: string
+      notes?: string
+    }) =>
+      api.post(`/restaurant-orders/${payload.orderId}/settle`, {
+        settleFull: true,
+        method: payload.method,
+        reference: payload.reference,
+        notes: payload.notes,
+      }),
+    onSuccess: (
+      res: { success?: boolean; message?: string; error?: string; data?: { isFullySettled?: boolean } },
+      variables
+    ) => {
+      if (!res?.success) {
+        toast.error(res?.error || 'Payment failed')
+        return
+      }
+      toast.success(res.message || 'Payment recorded')
+      setPayOrder(null)
+      setPayReference('')
+      setPayNotes('')
+      queryClient.invalidateQueries({ queryKey: ['restaurant-orders'] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      if (res.data?.isFullySettled) {
+        openRestaurantReceiptTab(variables.orderId, { autoPrint: true })
+      }
+    },
+    onError: (error: Error) => {
+      toast.error('Payment failed', { description: error.message })
+    },
+  })
+
+  const openPayDialog = (order: RestaurantOrder) => {
+    setPayOrder(order)
+    setPayMethod('CASH')
+    setPayReference(`CASH-${order.orderNumber}`)
+    setPayNotes('')
+  }
+
+  const billingBadgeClass = (state: string) => {
+    if (state === 'HOTEL_BILL') return 'bg-sky-50 text-sky-800 border-sky-200'
+    if (state === 'PAID_DIRECT') return 'bg-emerald-50 text-emerald-800 border-emerald-200'
+    return 'bg-amber-50 text-amber-800 border-amber-200'
+  }
+
+  const renderDeliveredActions = (order: RestaurantOrder, compact = false) => {
+    if (order.status !== 'DELIVERED') return null
+    const billingState = resolveOrderBillingState(order)
+
+    if (billingState === 'PAID_DIRECT') {
+      return (
+        <Button
+          size={compact ? 'sm' : 'default'}
+          variant="outline"
+          className={compact ? 'h-7 text-xs' : ''}
+          onClick={() => openRestaurantReceiptTab(order.id)}
+        >
+          <Printer className="w-3.5 h-3.5 mr-1" />
+          Receipt
+        </Button>
+      )
+    }
+
+    if (billingState === 'HOTEL_BILL') {
+      return (
+        <Badge variant="outline" className={`${billingBadgeClass('HOTEL_BILL')} text-xs`}>
+          Sent to hotel
+        </Badge>
+      )
+    }
+
+    return (
+      <div className={`flex ${compact ? 'flex-col gap-1 items-end' : 'flex-wrap gap-2'}`}>
+        {canSendOrderToHotel(order) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={`h-7 text-xs border-sky-300 text-sky-800 hover:bg-sky-50 ${compact ? 'w-full' : ''}`}
+            disabled={sendToHotelMutation.isPending}
+            onClick={() => sendToHotelMutation.mutate(order.id)}
+          >
+            <Building2 className="w-3.5 h-3.5 mr-1" />
+            Send hotel
+          </Button>
+        )}
+        {canPayOrderDirectly(order) && (
+          <Button
+            size="sm"
+            className={`h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white ${compact ? 'w-full' : ''}`}
+            onClick={() => openPayDialog(order)}
+          >
+            <Wallet className="w-3.5 h-3.5 mr-1" />
+            Payment
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   const filteredOrders = orders.filter((order) => matchesOrderSearch(order, searchQuery))
 
@@ -525,12 +670,22 @@ export default function OrdersPage() {
                           ৳{order.totalAmount.toFixed(0)}
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={`${statusCfg.bg} ${statusCfg.color} border text-xs`}
-                          >
-                            {statusCfg.label}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge
+                              variant="outline"
+                              className={`${statusCfg.bg} ${statusCfg.color} border text-xs w-fit`}
+                            >
+                              {statusCfg.label}
+                            </Badge>
+                            {order.status === 'DELIVERED' && (
+                              <Badge
+                                variant="outline"
+                                className={`${billingBadgeClass(resolveOrderBillingState(order))} text-[10px] w-fit`}
+                              >
+                                {formatOrderBillingState(resolveOrderBillingState(order))}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {formatDateTime(order.createdAt)}
@@ -538,27 +693,33 @@ export default function OrdersPage() {
                           <span className="text-[10px]">{timeElapsed(order.createdAt)}</span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setSelectedOrder(order)}
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                            {nextStatus && (
+                          <div
+                            className="flex flex-col items-end gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-end gap-1">
                               <Button
-                                size="sm"
-                                className="h-7 text-xs bg-amber-600 hover:bg-amber-700"
-                                onClick={() =>
-                                  statusMutation.mutate({ id: order.id, status: nextStatus })
-                                }
-                                disabled={statusMutation.isPending}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setSelectedOrder(order)}
                               >
-                                {getNextStatusLabel(order.status)}
+                                <Eye className="w-3.5 h-3.5" />
                               </Button>
-                            )}
+                              {nextStatus && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-amber-600 hover:bg-amber-700"
+                                  onClick={() =>
+                                    statusMutation.mutate({ id: order.id, status: nextStatus })
+                                  }
+                                  disabled={statusMutation.isPending}
+                                >
+                                  {getNextStatusLabel(order.status)}
+                                </Button>
+                              )}
+                            </div>
+                            {renderDeliveredActions(order, true)}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -736,8 +897,112 @@ export default function OrdersPage() {
                   {getNextStatusLabel(selectedOrder.status)}
                 </Button>
               )}
+
+              {selectedOrder.status === 'DELIVERED' && (
+                <div className="space-y-2 pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    Billing: {formatOrderBillingState(resolveOrderBillingState(selectedOrder))}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {renderDeliveredActions(selectedOrder)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!payOrder} onOpenChange={(open) => !open && setPayOrder(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record payment — {payOrder?.orderNumber}</DialogTitle>
+          </DialogHeader>
+          {payOrder && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm">
+                <p className="text-muted-foreground">Amount due</p>
+                <p className="text-2xl font-bold text-emerald-800">
+                  ৳{computeOrderDue(payOrder.totalAmount, payOrder.payments ?? []).dueAmount.toFixed(0)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Paid orders are not sent to hotel billing.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Payment method</Label>
+                <Select
+                  value={payMethod}
+                  onValueChange={(v) => {
+                    setPayMethod(v)
+                    if (v === 'CASH') {
+                      setPayReference(`CASH-${payOrder.orderNumber}`)
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHOD_OPTIONS_WITH_PAYMENT.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {paymentRequiresReference(payMethod) && (
+                <div className="space-y-2">
+                  <Label>Reference / receipt no.</Label>
+                  <Input
+                    value={payReference}
+                    onChange={(e) => setPayReference(e.target.value)}
+                    placeholder="Transaction reference"
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Notes (optional)</Label>
+                <Textarea
+                  value={payNotes}
+                  onChange={(e) => setPayNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayOrder(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={payMutation.isPending || !payOrder}
+              onClick={() => {
+                if (!payOrder) return
+                const reference =
+                  payReference.trim() ||
+                  (payMethod === 'CASH' ? `CASH-${payOrder.orderNumber}` : '')
+                if (!reference) {
+                  toast.error('Reference is required for this payment method')
+                  return
+                }
+                payMutation.mutate({
+                  orderId: payOrder.id,
+                  method: payMethod,
+                  reference,
+                  notes: payNotes.trim() || undefined,
+                })
+              }}
+            >
+              {payMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Pay & print receipt'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

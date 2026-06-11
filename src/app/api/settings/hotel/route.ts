@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     const authResult = requireRole(
       request,
       'ADMIN' as RoleType,
-      'HOTEL_STAFF' as RoleType
+      'HOTEL_STAFF' as RoleType,
+      'HOTEL_FD' as RoleType
     )
     if (authResult instanceof Response) return authResult
 

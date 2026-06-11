@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { requireAuth, canAccessRestaurant } from '@/lib/auth';
 import { successResponse, errorResponse, notFoundResponse, logActivity } from '@/lib/api-utils';
 import { parsePaymentMethod } from '@/lib/payment-method';
-import { computeOrderDue, isHotelFolioRestaurantOrder } from '@/lib/restaurant-order-dues';
+import { computeOrderDue } from '@/lib/restaurant-order-dues';
 import { resolveRestaurantSettlementSource } from '@/lib/restaurant-order-settle';
 import { settleRestaurantOrderInTx } from '@/lib/restaurant-order-settle';
 
@@ -15,7 +15,7 @@ export async function POST(
     const authResult = requireAuth(request);
     if (authResult instanceof Response) return authResult;
 
-    if (!canAccessRestaurant(authResult.role) && authResult.role !== 'HOTEL_STAFF') {
+    if (!canAccessRestaurant(authResult.role) && authResult.role !== 'HOTEL_STAFF' && authResult.role !== 'HOTEL_FD') {
       return errorResponse('You do not have permission to settle restaurant orders', 403);
     }
 
@@ -30,7 +30,9 @@ export async function POST(
     if (method === 'NONE') {
       return errorResponse('Invalid payment method');
     }
-    if (!reference) {
+    const resolvedReference =
+      reference || (method === 'CASH' ? `CASH-${id.slice(-8)}` : '');
+    if (!resolvedReference) {
       return errorResponse('Transaction / receipt number is required');
     }
 
@@ -38,25 +40,22 @@ export async function POST(
       where: { id },
       include: {
         payments: { select: { amount: true, paymentType: true } },
+        companyLedgerBill: { select: { id: true } },
       },
     });
 
     if (!order) return notFoundResponse('Restaurant order');
 
-    if (
-      isHotelFolioRestaurantOrder(order) &&
-      authResult.role === 'RESTAURANT_STAFF'
-    ) {
-      return errorResponse(
-        'This is a room guest food bill. The guest pays the hotel at checkout; hotel staff must settle the restaurant due later.'
-      );
-    }
+    const settlementSource =
+      authResult.role === 'RESTAURANT_STAFF' || authResult.role === 'ADMIN'
+        ? 'RESTAURANT_DIRECT'
+        : resolveRestaurantSettlementSource(authResult.role);
 
-    const settlementSource = resolveRestaurantSettlementSource(authResult.role);
-    if (isHotelFolioRestaurantOrder(order) && settlementSource !== 'HOTEL_DUE') {
-      return errorResponse(
-        'Room guest food orders are settled by hotel staff when clearing restaurant dues.'
-      );
+    if (order.billingDisposition === 'HOTEL_BILL' || order.companyLedgerBill) {
+      return errorResponse('This order was sent to hotel billing and cannot be paid here', 400);
+    }
+    if (order.billingDisposition === 'PAID_DIRECT') {
+      return errorResponse('This order is already paid', 400);
     }
 
     const { dueAmount } = computeOrderDue(order.totalAmount, order.payments);
@@ -66,7 +65,7 @@ export async function POST(
       settleRestaurantOrderInTx(tx, order, {
         amount: amount!,
         method,
-        reference,
+        reference: resolvedReference,
         notes,
         settlementSource,
         receivedBy: authResult.id,
@@ -82,7 +81,7 @@ export async function POST(
         orderNumber: order.orderNumber,
         amount: result.payment.amount,
         method,
-        reference,
+        reference: resolvedReference,
         settlementSource: result.payment.settlementSource,
         remainingDue: result.remainingDue,
       })

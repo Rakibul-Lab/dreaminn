@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore, canAccessHotel, canAccessRestaurant, canAccessAdmin } from '@/lib/auth-store'
 import { CURRENT_PAGE_STORAGE_KEY } from '@/lib/session'
+import { formatRoleLabel } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { useAuthHydration } from '@/hooks/use-auth-hydration'
 import { api } from '@/lib/api-client'
@@ -84,27 +85,27 @@ interface AppNotification {
 
 const navItems: NavItem[] = [
   // Hotel - RRP Dream Inn
-  { key: 'hotel-dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'rooms', label: 'Rooms', icon: <Bed className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
+  { key: 'hotel-dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
+  { key: 'rooms', label: 'Rooms', icon: <Bed className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
   { key: 'room-types', label: 'Room Types', icon: <Tag className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'bookings', label: 'Reservations', icon: <CalendarCheck className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'customers', label: 'Guests', icon: <UserCircle className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'company-ledger', label: 'Company Ledger', icon: <Building2 className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
-  { key: 'housekeeping', label: 'Housekeeping', icon: <SprayCan className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'RRP Dream Inn' },
+  { key: 'bookings', label: 'Reservations', icon: <CalendarCheck className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
+  { key: 'customers', label: 'Guests', icon: <UserCircle className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
+  { key: 'company-ledger', label: 'Company Ledger', icon: <Building2 className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
+  { key: 'housekeeping', label: 'Housekeeping', icon: <SprayCan className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'RRP Dream Inn' },
   // Restaurant - CloudView
   { key: 'hotel-dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, allowedRoles: ['RESTAURANT_STAFF'], group: 'CloudView' },
   { key: 'pos', label: 'POS Terminal', icon: <ShoppingCart className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF'], group: 'CloudView' },
   { key: 'menu', label: 'Menu Management', icon: <UtensilsCrossed className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF'], group: 'CloudView' },
   { key: 'orders', label: 'Orders', icon: <ClipboardList className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF'], group: 'CloudView' },
-  { key: 'kitchen', label: 'Kitchen Display', icon: <ChefHat className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF', 'HOTEL_STAFF'], group: 'CloudView' },
+  { key: 'kitchen', label: 'Kitchen Display', icon: <ChefHat className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'CloudView' },
   { key: 'tables', label: 'Tables', icon: <Grid3X3 className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF'], group: 'CloudView' },
   { key: 'waiters', label: 'Waiters', icon: <UserRound className="h-4 w-4" />, allowedRoles: ['ADMIN', 'RESTAURANT_STAFF'], group: 'CloudView' },
   // Billing
-  { key: 'invoices', label: 'Invoices', icon: <FileText className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'Billing' },
-  { key: 'payments', label: 'Payments', icon: <CreditCard className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'], group: 'Billing' },
-  { key: 'deposits', label: 'Deposits', icon: <Landmark className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF'], group: 'Billing' },
+  { key: 'invoices', label: 'Invoices', icon: <FileText className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'Billing' },
+  { key: 'payments', label: 'Payments', icon: <CreditCard className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD', 'RESTAURANT_STAFF'], group: 'Billing' },
+  { key: 'deposits', label: 'Deposits', icon: <Landmark className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD'], group: 'Billing' },
   // Analytics
-  { key: 'reports', label: 'Reports', icon: <BarChart3 className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'], group: 'Analytics' },
+  { key: 'reports', label: 'Reports', icon: <BarChart3 className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD', 'RESTAURANT_STAFF'], group: 'Analytics' },
   // Admin
   { key: 'admin-dashboard', label: 'Admin Overview', icon: <LayoutDashboard className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
   { key: 'users', label: 'Users', icon: <Users className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
@@ -112,7 +113,7 @@ const navItems: NavItem[] = [
   { key: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
   { key: 'logs', label: 'Activity Logs', icon: <ScrollText className="h-4 w-4" />, allowedRoles: ['ADMIN'], group: 'System' },
   // Account
-  { key: 'profile', label: 'My Profile', icon: <User className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'RESTAURANT_STAFF'], group: 'Account' },
+  { key: 'profile', label: 'My Profile', icon: <User className="h-4 w-4" />, allowedRoles: ['ADMIN', 'HOTEL_STAFF', 'HOTEL_FD', 'RESTAURANT_STAFF'], group: 'Account' },
 ]
 
 const SIDEBAR_COLLAPSED_KEY = 'erp_sidebar_collapsed'
@@ -158,7 +159,7 @@ function LoginForm() {
             name: u.name,
             avatar: u.avatar ?? null,
             phone: u.phone ?? null,
-            role: u.role as 'ADMIN' | 'HOTEL_STAFF' | 'RESTAURANT_STAFF',
+            role: u.role as 'ADMIN' | 'HOTEL_STAFF' | 'HOTEL_FD' | 'RESTAURANT_STAFF',
           },
           res.data.token
         )
@@ -290,8 +291,21 @@ function LoginForm() {
                     <Hotel className="h-4 w-4 text-emerald-700" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-emerald-800">Hotel Staff</p>
+                    <p className="text-sm font-medium text-emerald-800">Hotel Manager</p>
                     <p className="text-xs text-emerald-500">Rooms, reservations, billing</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quickLogin('fd@erp.com', 'fd123')}
+                  className="flex items-center gap-3 p-2.5 rounded-lg bg-teal-50 hover:bg-teal-100 transition-colors text-left w-full"
+                >
+                  <div className="h-8 w-8 rounded-full bg-teal-200 flex items-center justify-center">
+                    <Hotel className="h-4 w-4 text-teal-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-teal-800">Hotel F.D.</p>
+                    <p className="text-xs text-teal-500">Front desk — room status only</p>
                   </div>
                 </button>
                 <button
@@ -320,7 +334,7 @@ function LoginForm() {
 
 function getDefaultPage(role: string | undefined): PageKey {
   if (role === 'ADMIN') return 'admin-dashboard'
-  if (role === 'HOTEL_STAFF') return 'hotel-dashboard'
+  if (role === 'HOTEL_STAFF' || role === 'HOTEL_FD') return 'hotel-dashboard'
   if (role === 'RESTAURANT_STAFF') return 'hotel-dashboard'
   return 'hotel-dashboard'
 }
@@ -427,6 +441,7 @@ function ERPApp() {
   const roleBadgeColors: Record<string, string> = {
     ADMIN: 'bg-red-50 text-red-700 border-red-200',
     HOTEL_STAFF: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    HOTEL_FD: 'bg-teal-50 text-teal-700 border-teal-200',
     RESTAURANT_STAFF: 'bg-amber-50 text-amber-700 border-amber-200',
   }
 
@@ -784,7 +799,7 @@ function ERPApp() {
                   <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                   <Badge variant="outline" className={`mt-1.5 text-[10px] px-1.5 py-0 ${roleBadgeColors[user?.role || ''] || ''}`}>
-                    {user?.role?.replace('_', ' ')}
+                    {formatRoleLabel(user?.role)}
                   </Badge>
                 </div>
                 <DropdownMenuItem onClick={() => handlePageNavigation('profile')}>

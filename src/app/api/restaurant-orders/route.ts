@@ -14,7 +14,7 @@ import { Prisma, RoleType } from '@prisma/client';
 
 // Helper to filter order data based on user role
 function filterOrderByRole(order: Record<string, unknown>, role: RoleType) {
-  if (role === 'ADMIN' || role === 'HOTEL_STAFF') {
+  if (role === 'ADMIN' || role === 'HOTEL_STAFF' || role === 'HOTEL_FD') {
     // Full access - return everything
     return order;
   }
@@ -130,10 +130,16 @@ export async function GET(request: NextRequest) {
           name: true,
         },
       },
+      payments: {
+        select: { amount: true, paymentType: true, settlementSource: true },
+      },
+      companyLedgerBill: {
+        select: { id: true },
+      },
     };
 
     // HOTEL_STAFF and ADMIN can see booking with customer details
-    if (authResult.role === 'ADMIN' || authResult.role === 'HOTEL_STAFF') {
+    if (authResult.role === 'ADMIN' || authResult.role === 'HOTEL_STAFF' || authResult.role === 'HOTEL_FD') {
       include.booking = {
         include: {
           customer: {

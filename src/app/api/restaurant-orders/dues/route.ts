@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
     const authResult = requireAuth(request);
     if (authResult instanceof Response) return authResult;
 
-    if (!canAccessRestaurant(authResult.role) && authResult.role !== 'HOTEL_STAFF') {
+    if (!canAccessRestaurant(authResult.role) && authResult.role !== 'HOTEL_STAFF' && authResult.role !== 'HOTEL_FD') {
       return errorResponse('You do not have permission to view restaurant dues', 403);
     }
 

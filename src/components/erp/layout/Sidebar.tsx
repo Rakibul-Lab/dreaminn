@@ -92,6 +92,10 @@ const roleNavItems: Record<string, ViewId[]> = {
     'dashboard', 'rooms', 'room-types', 'bookings', 'customers', 'company-ledger',
     'kitchen', 'invoices', 'payments', 'deposits', 'reports', 'housekeeping',
   ],
+  HOTEL_FD: [
+    'dashboard', 'rooms', 'bookings', 'customers', 'company-ledger',
+    'kitchen', 'invoices', 'payments', 'deposits', 'reports', 'housekeeping',
+  ],
   RESTAURANT_STAFF: [
     'restaurant-pos', 'menu', 'orders', 'kitchen', 'tables',
   ],

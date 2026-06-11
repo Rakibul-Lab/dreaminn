@@ -1,0 +1,3 @@
+{
+  "/api/restaurant-orders/[id]/settle/route": "app/api/restaurant-orders/[id]/settle/route.js"
+}

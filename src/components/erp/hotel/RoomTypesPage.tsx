@@ -28,6 +28,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, BedDouble, Users, Wifi } from 'lucide-react';
+import { useAuthStore, canManageRoomInventory } from '@/lib/auth-store';
 
 interface RoomType {
   id: string;
@@ -41,6 +42,8 @@ interface RoomType {
 }
 
 export function RoomTypesPage() {
+  const user = useAuthStore((s) => s.user);
+  const canManage = canManageRoomInventory(user?.role);
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -155,6 +158,17 @@ export function RoomTypesPage() {
       return [];
     }
   };
+
+  if (!canManage) {
+    return (
+      <Card className="border-amber-200 bg-amber-50">
+        <CardContent className="p-6 text-center">
+          <p className="text-amber-700 font-medium">Access Denied</p>
+          <p className="text-amber-600 text-sm mt-1">Only hotel managers and admins can manage room types.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (

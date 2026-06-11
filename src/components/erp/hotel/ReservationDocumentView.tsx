@@ -29,6 +29,7 @@ import {
   RESERVATION_REQUIRED_PLACEHOLDER,
   reservationDocValue,
   reservationIdLabel,
+  reservationVisaExpiryLabel,
 } from '@/lib/reservation-field-placeholders'
 
 export interface ReservationDocumentData {
@@ -60,6 +61,7 @@ export interface ReservationDocumentData {
     address?: string | null
     idType?: string | null
     idNumber?: string | null
+    visaExpiryDate?: string | null
     registrationNumber?: string | null
     nationality?: string | null
   }
@@ -72,19 +74,6 @@ export interface ReservationDocumentData {
     phone?: string | null
     role: string
   } | null
-}
-
-const STAFF_ROLE_LABELS: Record<string, string> = {
-  ADMIN: 'Administrator',
-  HOTEL_STAFF: 'Hotel Staff',
-  RESTAURANT_STAFF: 'Restaurant Staff',
-}
-
-function idTypeLabel(type?: string | null) {
-  if (type === 'passport') return 'Passport'
-  if (type === 'driving_license') return 'Driving License'
-  if (type === 'national_id') return 'National ID (NID)'
-  return type || '—'
 }
 
 interface ReservationDocumentViewProps {
@@ -164,13 +153,19 @@ export function ReservationDocumentView({
   const confirmationNo = formatConfirmationNumber(reservation)
   const guestsLabel = `${reservation.adults} adult(s)${reservation.children > 0 ? `, ${reservation.children} child(ren)` : ''}`
   const showMissingFields = reservation.isInitialReservation === true
-  const idLabel = showMissingFields
-    ? reservationIdLabel(
-        reservation.customer.idType,
-        reservation.customer.idNumber,
-        { requiredWhenMissing: true }
-      )
-    : `${idTypeLabel(reservation.customer.idType)}${reservation.customer.idNumber ? ` — ${reservation.customer.idNumber}` : ''}`
+  const idLabel = reservationIdLabel(
+    reservation.customer.idType,
+    reservation.customer.idNumber,
+    {
+      requiredWhenMissing: showMissingFields,
+      visaExpiryDate: reservation.customer.visaExpiryDate,
+    }
+  )
+  const visaExpiryLabel = reservationVisaExpiryLabel(
+    reservation.customer.idType,
+    reservation.customer.visaExpiryDate,
+    showMissingFields
+  )
   const idAttachments = reservation.idDocuments ?? []
   const placeholderClass = 'text-amber-700 italic'
 
@@ -362,7 +357,7 @@ export function ReservationDocumentView({
                 <span className="rd-muted">{DEFAULT_SMOKING_STATUS}</span>
               </p>
               <p>
-                <span className="rd-label">Room Rate:</span>{' '}
+                <span className="rd-label">Room rent:</span>{' '}
                 <span className="rd-muted">
                   {formatBdt(reservation.totalRoomCharge)} (total, {nights} night{nights > 1 ? 's' : ''})
                 </span>
@@ -399,6 +394,16 @@ export function ReservationDocumentView({
                   {idLabel}
                 </span>
               </p>
+              {reservation.customer.idType === 'passport' && visaExpiryLabel && (
+                <p>
+                  <span className="rd-label">Visa expiry date:</span>{' '}
+                  <span
+                    className={`rd-muted ${showMissingFields && visaExpiryLabel === RESERVATION_REQUIRED_PLACEHOLDER ? placeholderClass : ''}`}
+                  >
+                    {visaExpiryLabel}
+                  </span>
+                </p>
+              )}
               <p>
                 <span className="rd-label">Remarks:</span>{' '}
                 <span className="rd-muted">{reservation.notes || '—'}</span>
@@ -437,12 +442,6 @@ export function ReservationDocumentView({
                   <p>
                     <span className="rd-label">Email:</span>{' '}
                     <span className="rd-muted">{reservation.creator.email}</span>
-                  </p>
-                  <p>
-                    <span className="rd-label">Role:</span>{' '}
-                    <span className="rd-muted">
-                      {STAFF_ROLE_LABELS[reservation.creator.role] || reservation.creator.role}
-                    </span>
                   </p>
                 </div>
               ) : (

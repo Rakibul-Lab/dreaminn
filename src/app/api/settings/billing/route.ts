@@ -7,7 +7,7 @@ import { RoleType } from '@prisma/client'
 /** Billing defaults for reservations (hotel staff). */
 export async function GET(request: NextRequest) {
   try {
-    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType)
+    const authResult = requireRole(request, 'ADMIN' as RoleType, 'HOTEL_STAFF' as RoleType, 'HOTEL_FD' as RoleType)
     if (authResult instanceof Response) return authResult
 
     const vatPercent = await getHotelVatPercent()

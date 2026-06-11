@@ -26,6 +26,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatRoleLabel } from '@/lib/roles'
 
 interface UserData {
   id: string
@@ -41,12 +42,14 @@ interface UserData {
 const roleIcons: Record<string, React.ReactNode> = {
   ADMIN: <ShieldAlert className="h-4 w-4 text-red-500" />,
   HOTEL_STAFF: <ShieldCheck className="h-4 w-4 text-emerald-500" />,
+  HOTEL_FD: <ShieldCheck className="h-4 w-4 text-teal-500" />,
   RESTAURANT_STAFF: <Shield className="h-4 w-4 text-amber-500" />,
 }
 
 const roleColors: Record<string, string> = {
   ADMIN: 'bg-red-50 text-red-700 border-red-200',
   HOTEL_STAFF: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  HOTEL_FD: 'bg-teal-50 text-teal-700 border-teal-200',
   RESTAURANT_STAFF: 'bg-amber-50 text-amber-700 border-amber-200',
 }
 
@@ -287,7 +290,7 @@ export default function UsersPage() {
                       <TableCell>
                         <Badge variant="outline" className={`${roleColors[u.role] || ''} flex items-center gap-1 w-fit`}>
                           {roleIcons[u.role]}
-                          {u.role.replace('_', ' ')}
+                          {formatRoleLabel(u.role)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">{u.phone || '-'}</TableCell>
@@ -403,7 +406,8 @@ export default function UsersPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
-                  <SelectItem value="HOTEL_STAFF">Hotel Staff</SelectItem>
+                  <SelectItem value="HOTEL_STAFF">Hotel Manager</SelectItem>
+                  <SelectItem value="HOTEL_FD">Hotel F.D.</SelectItem>
                   <SelectItem value="RESTAURANT_STAFF">Restaurant Staff</SelectItem>
                 </SelectContent>
               </Select>

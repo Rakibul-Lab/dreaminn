@@ -9,6 +9,7 @@ export interface ReservationPdfData {
   guestRegistrationNumber?: string | null
   idType?: string | null
   idNumber?: string | null
+  visaExpiryDate?: string | null
   roomNumber: string
   roomType: string
   checkIn: string
