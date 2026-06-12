@@ -19,7 +19,7 @@ jobs:
           DATABASE_URL: mysql://build:build@localhost:3306/build
           BUILD_CPANEL_LOCAL: '1'
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           node scripts/build-cpanel.js
 
       - uses: actions/upload-artifact@v4
