@@ -138,7 +138,6 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [seeding, setSeeding] = useState(false)
   const [emailBlocking, setEmailBlocking] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -172,27 +171,6 @@ function LoginForm() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleSeed = async () => {
-    setSeeding(true)
-    try {
-      const res = await api.post<{ success: boolean; message: string }>('/auth/seed')
-      if (res.success) {
-        toast({ title: 'Database Seeded!', description: 'You can now login with the demo accounts below' })
-      } else {
-        toast({ title: 'Already Seeded', description: 'Database already has data', variant: 'destructive' })
-      }
-    } catch {
-      toast({ title: 'Seed Failed', description: 'Database may already be seeded', variant: 'destructive' })
-    } finally {
-      setSeeding(false)
-    }
-  }
-
-  const quickLogin = (email: string, password: string) => {
-    setEmail(email)
-    setPassword(password)
   }
 
   return (
@@ -252,77 +230,6 @@ function LoginForm() {
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
-
-            <Separator className="my-5" />
-
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                className="w-full border-dashed"
-                onClick={handleSeed}
-                disabled={seeding}
-                size="sm"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                {seeding ? 'Seeding...' : 'Seed Database (First Time)'}
-              </Button>
-
-              <p className="text-xs text-slate-400 text-center font-medium">QUICK LOGIN</p>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => quickLogin('admin@erp.com', 'admin123')}
-                  className="flex items-center gap-3 p-2.5 rounded-lg bg-red-50 hover:bg-red-100 transition-colors text-left w-full"
-                >
-                  <div className="h-8 w-8 rounded-full bg-red-200 flex items-center justify-center">
-                    <LayoutDashboard className="h-4 w-4 text-red-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-red-800">Admin</p>
-                    <p className="text-xs text-red-500">Full system access</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quickLogin('hotel@erp.com', 'hotel123')}
-                  className="flex items-center gap-3 p-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors text-left w-full"
-                >
-                  <div className="h-8 w-8 rounded-full bg-emerald-200 flex items-center justify-center">
-                    <Hotel className="h-4 w-4 text-emerald-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-emerald-800">Hotel Manager</p>
-                    <p className="text-xs text-emerald-500">Rooms, reservations, billing</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quickLogin('fd@erp.com', 'fd123')}
-                  className="flex items-center gap-3 p-2.5 rounded-lg bg-teal-50 hover:bg-teal-100 transition-colors text-left w-full"
-                >
-                  <div className="h-8 w-8 rounded-full bg-teal-200 flex items-center justify-center">
-                    <Hotel className="h-4 w-4 text-teal-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-teal-800">Hotel F.D.</p>
-                    <p className="text-xs text-teal-500">Front desk — room status only</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quickLogin('restaurant@erp.com', 'rest123')}
-                  className="flex items-center gap-3 p-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 transition-colors text-left w-full"
-                >
-                  <div className="h-8 w-8 rounded-full bg-amber-200 flex items-center justify-center">
-                    <UtensilsCrossed className="h-4 w-4 text-amber-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-amber-800">Restaurant Staff</p>
-                    <p className="text-xs text-amber-500">POS, menu, orders</p>
-                  </div>
-                </button>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
