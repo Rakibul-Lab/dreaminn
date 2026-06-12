@@ -35,6 +35,35 @@ function createZip() {
   }
 }
 
+function stripTestUploads(dir) {
+  const uploads = path.join(dir, 'public', 'uploads', 'id-docs')
+  if (!fs.existsSync(uploads)) {
+    fs.mkdirSync(uploads, { recursive: true })
+    return
+  }
+  for (const entry of fs.readdirSync(uploads, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name !== '.gitkeep') {
+      fs.rmSync(path.join(uploads, entry.name))
+    }
+  }
+}
+
+function fixRequiredServerFiles(dir) {
+  const file = path.join(dir, '.next', 'required-server-files.json')
+  if (!fs.existsSync(file)) return
+
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+  data.appDir = '.'
+  data.relativeAppDir = ''
+  if (Array.isArray(data.files)) {
+    data.files = data.files.map((f) => f.replace(/\\/g, '/'))
+  }
+  if (data.config?.turbopack?.root) {
+    delete data.config.turbopack.root
+  }
+  fs.writeFileSync(file, JSON.stringify(data))
+}
+
 function packageDeploy() {
   const required = [
     'server.js',
@@ -55,6 +84,8 @@ function packageDeploy() {
   fs.rmSync(output, { recursive: true, force: true })
   fs.cpSync(standalone, output, { recursive: true })
   removeEnvFiles(output)
+  stripTestUploads(output)
+  fixRequiredServerFiles(output)
 
   fs.mkdirSync(path.join(output, 'tmp'), { recursive: true })
   fs.writeFileSync(path.join(output, 'tmp', 'restart.txt'), new Date().toISOString())
