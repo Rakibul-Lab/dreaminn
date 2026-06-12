@@ -80,5 +80,5 @@ if (process.platform === 'win32' && process.env.BUILD_CPANEL_LOCAL !== '1') {
   process.exit(1)
 }
 
-run('npm run build')
+run('npx next build --webpack && node scripts/copy-standalone-assets.js')
 packageDeploy()
