@@ -87,6 +87,13 @@ function packageDeploy() {
   stripTestUploads(output)
   fixRequiredServerFiles(output)
 
+  const schemaSrc = path.join(root, 'prisma', 'schema.prisma')
+  const schemaDest = path.join(output, 'prisma', 'schema.prisma')
+  if (fs.existsSync(schemaSrc)) {
+    fs.mkdirSync(path.dirname(schemaDest), { recursive: true })
+    fs.copyFileSync(schemaSrc, schemaDest)
+  }
+
   fs.mkdirSync(path.join(output, 'tmp'), { recursive: true })
   fs.writeFileSync(path.join(output, 'tmp', 'restart.txt'), new Date().toISOString())
 
