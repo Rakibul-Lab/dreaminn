@@ -4,7 +4,30 @@
 const fs = require('fs')
 const path = require('path')
 
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return
+  for (const line of fs.readFileSync(filePath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq === -1) continue
+    const key = trimmed.slice(0, eq).trim()
+    let value = trimmed.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value
+    }
+  }
+}
+
 const appDir = __dirname
+loadEnvFile(path.join(appDir, '.env'))
+loadEnvFile(path.join(appDir, '.env.production'))
 const requiredFiles = path.join(appDir, '.next', 'required-server-files.json')
 
 if (!fs.existsSync(requiredFiles)) {

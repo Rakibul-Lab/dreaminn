@@ -58,8 +58,19 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Login error:', error);
+    const message = error instanceof Error ? error.message : 'Login failed';
+    const isDbError =
+      message.includes('DATABASE_URL') ||
+      message.includes('connect') ||
+      message.includes('Prisma') ||
+      message.includes('denied');
     return NextResponse.json(
-      { success: false, error: 'Login failed' },
+      {
+        success: false,
+        error: isDbError
+          ? 'Database connection failed. Check DATABASE_URL in cPanel or ~/dreaminn/.env'
+          : 'Login failed',
+      },
       { status: 500 }
     );
   }
