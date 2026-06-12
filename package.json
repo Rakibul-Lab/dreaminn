@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev -p 3000 --webpack",
     "build": "next build && node scripts/copy-standalone-assets.js",
-    "start": "cross-env NODE_ENV=production node .next/standalone/server.js",
+    "build:cpanel": "node scripts/build-cpanel.js",
+    "pack:upload": "node scripts/prepare-server-upload.js",
+    "start": "cross-env NODE_ENV=production node server.js",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

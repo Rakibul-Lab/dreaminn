@@ -19,4 +19,8 @@ const publicDest = path.join(root, '.next', 'standalone', 'public')
 copyRecursive(staticSrc, staticDest)
 copyRecursive(publicSrc, publicDest)
 
-console.log('Copied .next/static and public/ into .next/standalone/')
+const serverSrc = path.join(root, 'server.js')
+const serverDest = path.join(root, '.next', 'standalone', 'server.js')
+fs.cpSync(serverSrc, serverDest)
+
+console.log('Copied .next/static, public/, and server.js into .next/standalone/')

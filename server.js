@@ -1,26 +1,34 @@
 /**
- * cPanel / Passenger entry point.
- * Set "Application startup file" to: server.js
- * Requires a production build first: npm run build
+ * cPanel startup file — upload the full cpanel-deploy/ folder.
  */
 const fs = require('fs')
 const path = require('path')
 
-const standaloneDir = path.join(__dirname, '.next', 'standalone')
-const entry = path.join(standaloneDir, 'server.js')
+const appDir = __dirname
+const requiredFiles = path.join(appDir, '.next', 'required-server-files.json')
 
-if (!fs.existsSync(entry)) {
-  console.error(
-    [
-      'Next.js standalone build not found at .next/standalone/server.js',
-      'Run on the server:',
-      '  npm ci',
-      '  npx prisma generate',
-      '  npm run build',
-    ].join('\n')
-  )
+if (!fs.existsSync(requiredFiles)) {
+  console.error('Build missing. Use GitHub Actions → Build cPanel package, then upload cpanel-deploy/')
   process.exit(1)
 }
 
-process.chdir(standaloneDir)
-require(entry)
+process.env.NODE_ENV = 'production'
+process.chdir(appDir)
+
+const { config } = require(requiredFiles)
+process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(config)
+require('next')
+
+const { startServer } = require('next/dist/server/lib/start-server')
+
+startServer({
+  dir: appDir,
+  isDev: false,
+  config,
+  hostname: process.env.HOSTNAME || '0.0.0.0',
+  port: parseInt(process.env.PORT, 10) || 3000,
+  allowRetry: false,
+}).catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
